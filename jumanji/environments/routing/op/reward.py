@@ -35,7 +35,7 @@ class SparseReward(RewardFn):
         is_done: bool,
     )  -> chex.Numeric:
         
-        # If the episode is done
+        #if the action is invalid
         compute_sparse_reward = lambda: jax.lax.select(
             is_valid,
             jnp.dot,
@@ -44,7 +44,7 @@ class SparseReward(RewardFn):
             next_state.prizes,
         )
         
-        #if the action is invalid
+        # If the episode is done
         reward = lambda: jax.lax.select(
             is_done,
             compute_sparse_reward,
