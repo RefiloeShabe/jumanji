@@ -71,12 +71,15 @@ class UniformGenerator(Generator):
         num_visited = jnp.array(1, jnp.int32)
         
         # Randomly sample the prizes 
-        prizes = jax.random.uniform(
-            prizes_key, (self.num_nodes + 1, ), minval=0, maxval=1)
+        #prizes = jax.random.uniform(
+        #    prizes_key, (self.num_nodes + 1, ), minval=0, maxval=1)
         
         # Randomly sample the length of nodes from the depot
         length = jax.random.uniform(
             length_key, (self.num_nodes + 1, ), minval=0, maxval=2)
+        
+        # Compute prizes -> prizes are propotional to the distance to the depot 
+        prizes = 0.01 + (0.99 * length / jnp.max(length))
         
         # Set depot prize and lenght to 0 --> length between depot and depot is 0
         prizes = prizes.at[constants.DEPOT_IDX].set(0)
