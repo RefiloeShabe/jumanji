@@ -28,8 +28,12 @@ class OP(Environment[types_.State]):
             array of node indicies defining the route (set to DEPOT_IDX if not filled yet)
         - action_mask: jax array (bool) of shape (num_nodes + 1, )
             binary mask (False/True <--> illegal/legal <--> can/cannot be visited)
-        - prizes: jax array (float) of shape (num_nodes + 1, ) 
-            the associated prizez of each node and the depot note (0.0 for the depot)
+        - prizes: jax array (float) of shape (num_nodes + 1, ), could be either: 
+            - constant: all nodes have the same prize equal to 1. 
+            - uniform: the prizes of the nodes are randomly sampled from a uniform distribution
+              on a unit square.
+            - proportional: the prizes of the nodes are proportional to the length between the 
+              depot and the nodes.                       
         - length: jax array (float) of shape (num_nodes + 1, )
             the length between each node and the depot (0.0 for the depot)     
             
@@ -90,8 +94,8 @@ class OP(Environment[types_.State]):
         
         Args:
             generator: 'Generator' whose '__call__' method instantiates an environment instance.
-                The default option is 'UniformGenerator' which randomly generates 
-                OP instances with 20 nodes sampled from a uniform distribution.
+                The default option is 'UniformGenerator' which randomly generates OP instances 
+                with 20 nodes and prizes sampled from a uniform distribution .
             reward_fn: RewardFn whose '__call__' method computes the reward of an environment
                 transition. The function must compute the reward based on the current state,
                 the chosen action and the next state.

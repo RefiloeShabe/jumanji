@@ -29,6 +29,37 @@ class TestDummyGenerator:
         assert_trees_are_equal(state1, state2)
         
         
+class TestConstantGenerator:
+    @pytest.fixture
+    def constant_generator(self) -> generator.ConstantGenerator:
+        return generator.ConstantGenerator(
+            num_nodes=20,
+            max_length=2,
+        )        
+        
+    def test_constant_generator__properties(
+        self, constant_generator: generator.ConstantGenerator
+    )  -> None:
+        """Validate that the constant instance generator has the corrent properties."""
+        assert constant_generator.num_nodes == 20
+        assert constant_generator.max_length == 2
+        
+    def test_constant_generator__call(
+        self, constant_generator: generator.ConstantGenerator
+    )  -> None:
+        """ Validate that the constant instance generator's call function is jit-table
+        and compiles only once. Also check that giving two different keys results in 
+        two different instances.
+        """    
+        chex.clear_trace_counter()
+        call_fn = jax.jit(chex.assert_max_traces(constant_generator.__call__, n=1))
+        state1 = call_fn(key=jax.random.PRNGKey(1))
+        assert isinstance(state1, types_.State)
+        
+        state2 = call_fn(key=jax.random.PRNGKey(2))
+        assert_trees_are_different(state1, state2) 
+        
+        
 class TestUniformGenerator:
     @pytest.fixture
     def uniform_generator(self) -> generator.UniformGenerator:
@@ -44,7 +75,7 @@ class TestUniformGenerator:
         assert uniform_generator.num_nodes == 20
         assert uniform_generator.max_length == 2
         
-    def test_random_generator__call(
+    def test_uniform_generator__call(
         self, uniform_generator: generator.UniformGenerator
     )  -> None:
         """ Validate that the random instance generator's call function is jit-table
@@ -58,3 +89,34 @@ class TestUniformGenerator:
         
         state2 = call_fn(key=jax.random.PRNGKey(2))
         assert_trees_are_different(state1, state2) 
+        
+        
+class TestProportionalGenerator:
+    @pytest.fixture
+    def proportional_generator(self) -> generator.ProportionalGenerator:
+        return generator.ProportionalGenerator(
+            num_nodes=20,
+            max_length=2,
+        )        
+        
+    def test_proportional_generator__properties(
+        self, proportional_generator: generator.ProportionalGenerator
+    )  -> None:
+        """Validate that the proportional instance generator has the corrent properties."""
+        assert proportional_generator.num_nodes == 20
+        assert proportional_generator.max_length == 2
+        
+    def test_proportional_generator__call(
+        self, proportional_generator: generator.ProportionalGenerator
+    )  -> None:
+        """ Validate that the proportional instance generator's call function is jit-table
+        and compiles only once. Also check that giving two different keys results in 
+        two different instances.
+        """    
+        chex.clear_trace_counter()
+        call_fn = jax.jit(chex.assert_max_traces(proportional_generator.__call__, n=1))
+        state1 = call_fn(key=jax.random.PRNGKey(1))
+        assert isinstance(state1, types_.State)
+        
+        state2 = call_fn(key=jax.random.PRNGKey(2))
+        assert_trees_are_different(state1, state2)                 
