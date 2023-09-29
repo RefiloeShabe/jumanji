@@ -3,17 +3,19 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-import env, types_, constants
+from jumanji.environments.routing.op.env import OP 
+from jumanji.environments.routing.op.types import State
+from jumanji.environments.routing.op.constants import DEPOT_IDX
 from jumanji.testing.env_not_smoke import check_env_does_not_smoke
 from jumanji.testing.pytrees import assert_is_jax_array_tree
 from jumanji.types import StepType, TimeStep
 
 
 class TestSparseOP:
-    def test_op_sparse_reset(self, op_sparse_reward: env.OP) -> None:
+    def test_op_sparse_reset(self, op_sparse_reward: OP) -> None:
         """Validates the jitted reset of the environment"""
         chex.clear_trace_counter()
-        reset_fn = jax.jit(chex.assert_max_traces(op_sparse_reward, n=1))
+        reset_fn = jax.jit(chex.assert_max_traces(op_sparse_reward.reset, n=1))
         
         key = jax.random.PRNGKey(0)
         state, timestep = reset_fn(key)
@@ -21,30 +23,30 @@ class TestSparseOP:
         state, timestep = reset_fn(key)
         
         assert isinstance(timestep, TimeStep)
-        assert isinstance(state, types_.State)
+        assert isinstance(state, State)
         
         # Initially the position is at depot; the current remaining travel length is max length
         assert state.remaining_max_length == op_sparse_reward.max_length > 0
         # Length from depot to depot is 0
-        assert state.length[constants.DEPOT_IDX] == 0
+        assert state.length[DEPOT_IDX] == 0
         # The depot is initially visited
-        assert state.visited_mask[constants.DEPOT_IDX]
+        assert state.visited_mask[DEPOT_IDX]
         assert state.visited_mask.sum() == 1
         # First visited position is the depot
-        assert state.trajectory[0] == constants.DEPOT_IDX
+        assert state.trajectory[0] == DEPOT_IDX
         assert state.num_visited == 1
         # Prize of the depot
-        assert state.prizes[constants.DEPOT_IDX] == 0
+        assert state.prizes[DEPOT_IDX] == 0
         
         # Check that the state is made of DeviceArrays, this is false for the non-jitted
         # reset function since unpacking random.split returns numpy arrays and not device arrays.
         assert_is_jax_array_tree(state) 
         
-    def test_op_sparse_step(self, op_sparse_reward: env.OP) -> None:
+    def test_op_sparse_step(self, op_sparse_reward: OP) -> None:
         """Validates the jitted step of the environment"""
         chex.clear_trace_counter()
         
-        step_fn = chex.assert_max_traces(op_sparse_reward, n=1)
+        step_fn = chex.assert_max_traces(op_sparse_reward.step, n=1)
         step_fn = jax.jit(step_fn)
         
         key = jax.random.PRNGKey(0)
@@ -75,13 +77,12 @@ class TestSparseOP:
         assert jnp.array_equal(new_state.visited_mask, state.visited_mask)
         assert jnp.array_equal(new_state.num_visited, state.num_visited)
         assert jnp.array_equal(new_state.trajectory, state.trajectory)
-        
-        
-    def test_op_sparse_reward__does_not_smoke(self, op_sparse_reward: env.OP) -> None:
+             
+    def test_op_sparse_reward__does_not_smoke(self, op_sparse_reward: OP) -> None:
         """Tests that we can run an episode without any errors"""
         check_env_does_not_smoke(op_sparse_reward)  
         
-    def test_op_sparse__trajectory_action(self, op_sparse_reward: env.OP) -> None:
+    def test_op_sparse__trajectory_action(self, op_sparse_reward: OP) -> None:
         """Checks that the agent goes back to the depot when the remaining travel budget 
         does not allow visiting extra nodes and that appropriate reward is recieved.
         """
@@ -106,7 +107,7 @@ class TestSparseOP:
         assert not jnp.any(timestep.observation.action_mask)
         assert timestep.last()  
         
-    def test_op_sparse_invalid_action(self, op_sparse_reward: env.OP) -> None:
+    def test_op_sparse_invalid_action(self, op_sparse_reward: OP) -> None:
         """ Checks that an invalid action leads to a termination and the appropriate reward is
         received.
         """
@@ -127,15 +128,14 @@ class TestSparseOP:
             
         # Last action is invalid because it was already taken
         assert timestep.reward < 0
-        assert timestep.last() 
-        
+        assert timestep.last()       
           
              
 class TestDenseOP:
-    def test_op_dense_reset(self, op_dense_reward: env.OP) -> None:
+    def test_op_dense_reset(self, op_dense_reward: OP) -> None:
         """Validates the jitted reset of the environment"""
         chex.clear_trace_counter()
-        reset_fn = jax.jit(chex.assert_max_traces(op_dense_reward, n=1))
+        reset_fn = jax.jit(chex.assert_max_traces(op_dense_reward.reset, n=1))
         
         key = jax.random.PRNGKey(0)
         state, timestep = reset_fn(key)
@@ -143,28 +143,28 @@ class TestDenseOP:
         state, timestep = reset_fn(key)
         
         assert isinstance(timestep, TimeStep)
-        assert isinstance(state, types_.State)
+        assert isinstance(state, State)
         
         # Initially the position is at depot; the current remaining travel budget is max length
         assert state.remaining_max_length == op_dense_reward.max_length > 0
         # Length from depot to depot is 0
-        assert state.length[constants.DEPOT_IDX] == 0
+        assert state.length[DEPOT_IDX] == 0
         # The depot is initially visited
-        assert state.visited_mask[constants.DEPOT_IDX]
+        assert state.visited_mask[DEPOT_IDX]
         assert state.visited_mask.sum() == 1
         # First visited position is the depot
-        assert state.trajectory[0] == constants.DEPOT_IDX
+        assert state.trajectory[0] == DEPOT_IDX
         assert state.num_visited == 1
         # Prize of the depot
-        assert state.prizes[constants.DEPOT_IDX] == 0
+        assert state.prizes[DEPOT_IDX] == 0
 
         assert_is_jax_array_tree(state) 
         
-    def test_op_dense_step(self, op_dense_reward: env.OP) -> None:
+    def test_op_dense_step(self, op_dense_reward: OP) -> None:
         """Validates the jitted step of the environment"""
         chex.clear_trace_counter()
         
-        step_fn = chex.assert_max_traces(op_dense_reward, n=1)
+        step_fn = chex.assert_max_traces(op_dense_reward.step, n=1)
         step_fn = jax.jit(step_fn)
         
         key = jax.random.PRNGKey(0)
@@ -197,13 +197,12 @@ class TestDenseOP:
         assert jnp.array_equal(new_state.visited_mask, state.visited_mask)
         assert jnp.array_equal(new_state.num_visited, state.num_visited)
         assert jnp.array_equal(new_state.trajectory, state.trajectory)
-        
-        
-    def test_op_dense_reward__does_not_smoke(self, op_dense_reward: env.OP) -> None:
+            
+    def test_op_dense_reward__does_not_smoke(self, op_dense_reward: OP) -> None:
         """Tests that we can run an episode without any errors"""
         check_env_does_not_smoke(op_dense_reward)  
         
-    def test_op_dense__trajectory_action(self, op_dense_reward: env.OP) -> None:
+    def test_op_dense__trajectory_action(self, op_dense_reward: OP) -> None:
         """Tests that the agent goes back to the depot when the remaining travel budget 
         does not allow visiting extra nodes and that appropriate reward is recieved.
         """
@@ -228,7 +227,7 @@ class TestDenseOP:
         assert not jnp.any(timestep.observation.action_mask)
         assert timestep.last()  
         
-    def test_op_dense_invalid_action(self, op_dense_reward: env.OP) -> None:
+    def test_op_dense_invalid_action(self, op_dense_reward: OP) -> None:
         """ Checks that an invalid action leads to a termination and that the appropriate reward 
         is received.
         """
@@ -251,11 +250,11 @@ class TestDenseOP:
         assert timestep.reward < 0
         assert timestep.last()         
         
-
 def test_op__equivalence_dense_sparse_reward(
-    op_dense_reward: env.OP, op_sparse_reward: env.OP) -> None:
-    """ Checks that both dense and sparse environments return equal rewards when an
-    episode is done
+    op_dense_reward: OP, op_sparse_reward: OP
+) -> None:
+    """ Checks that both dense and sparse environments return equal rewards
+    when an episode is done
     """
     dense_step_fn = jax.jit(op_dense_reward.step)
     sparse_step_fn = jax.jit(op_sparse_reward.step)
@@ -276,6 +275,4 @@ def test_op__equivalence_dense_sparse_reward(
         return_sparse += timestep.reward
 
     # Check that both returns are the same and not the invalid action penalty
-    assert (
-        return_sparse == return_dense > -2 * op_dense_reward.num_nodes * jnp.sqrt(2)
-    )              
+    assert (return_sparse == return_dense > -2 * op_dense_reward.num_nodes * jnp.sqrt(2))              

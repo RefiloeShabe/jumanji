@@ -3,55 +3,52 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-import env, generator, reward, types_
+from jumanji.environments.routing.op.env import OP
+from jumanji.environments.routing.op.generator import Generator, ConstantGenerator, UniformGenerator, ProportionalGenerator
+from jumanji.environments.routing.op.reward import DenseReward, SparseReward
+from jumanji.environments.routing.op.types import State
 
 
 @pytest.fixture
-def dense_reward() -> reward.DenseReward:
-    return reward.DenseReward()
+def dense_reward() -> DenseReward:
+    return DenseReward()
 
 
 @pytest.fixture
-def sparse_reward() -> reward.SparseReward:
-    return reward.SparseReward()
+def sparse_reward() -> SparseReward:
+    return SparseReward()
 
 
 @pytest.fixture
-def op_dense_reward(dense_reward: reward.DenseReward) -> env.OP:
+def op_dense_reward(dense_reward: DenseReward) -> OP:
     """Instatiates an OP environment with dense reward, 4 nodes and length budget of 2.
     """
-    return env.OP(
-        generator=generator.UniformGenerator(num_nodes=4, max_length=2),
-        reward_fn=reward.DenseReward,
-    )
+    return OP(generator=UniformGenerator(num_nodes=4, max_length=2), reward_fn=dense_reward)
     
     
 @pytest.fixture
-def op_sparse_reward(sparse_reward: reward.SparseReward) -> env.OP:
+def op_sparse_reward(sparse_reward: SparseReward) -> OP:
     """Instatiates an OP environment with sparse reward, 4 nodes and length budget of 2.
     """  
-    return env.OP(
-        generator=generator.UniformGenerator(num_nodes=4, max_length=2),
-        reward_fn=reward.SparseReward,
-    )  
+    return OP(generator=UniformGenerator(num_nodes=4, max_length=2), reward_fn=sparse_reward)  
 
 
-class DummyGenerator(generator.Generator):
-    """Hardcoded 'Generator' mainly used for the testing and debugging. It deterministically outputs a
-    hardcoded instance with 4 nodes and maximum length budget of 2.
+class DummyGenerator(Generator):
+    """Hardcoded 'Generator' mainly used for the testing and debugging. It deterministically 
+    outputs a hardcoded instance with 4 nodes and maximum length budget of 2.
     """
     
     def __init__(self) -> None:
         super().__init__(num_nodes=4, max_length=2)
         
-    def __call__(self, key: chex.PRNGKey) -> types_.State:
-        """Call method responsible for generating a new state. It returns an orienteering problem without
-        any visited nodes and starting at the depot
+    def __call__(self, key: chex.PRNGKey) -> State:
+        """Call method responsible for generating a new state. It returns an orienteering problem
+        without any visited nodes and starting at the depot
         
         
         Args:
             keys: jax random key for any stochasticity used in the generation process. Not used
-                in this instance generator.
+            in this instance generator.
                 
         Returns:
             A OP State        
@@ -78,7 +75,7 @@ class DummyGenerator(generator.Generator):
         visited_mask = jnp.array([True, False, False, False, False], bool)
         trajectory = jnp.array([0, 0, 0, 0, 0], jnp.int32)
         
-        state = types_.State(
+        state = State(
             coordinates=coordinates,
             position=position,
             num_visited=num_visited,
@@ -89,4 +86,5 @@ class DummyGenerator(generator.Generator):
             trajectory=trajectory,
             key=jax.random.PRNGKey(0),
         )
+        
         return state    

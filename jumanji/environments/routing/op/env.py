@@ -13,10 +13,13 @@ from jumanji import specs
 from jumanji.env import Environment
 from jumanji.types import TimeStep, restart, termination, transition
 from jumanji.viewer import Viewer
-import generator, types_, reward, constants
+from jumanji.environments.routing.op.generator import ConstantGenerator, UniformGenerator, ProportionalGenerator
+from jumanji.environments.routing.op.types import State, Observation
+from jumanji.environments.routing.op.reward import DenseReward, SparseReward 
+from jumanji.environments.routing.op.constants import DEPOT_IDX 
 
 
-class OP(Environment[types_.State]):
+class OP(Environment[State]):
     """ Orienteering Problem (OP) as described in [1].
     
     - observation: Observation
@@ -81,13 +84,12 @@ class OP(Environment[types_.State]):
     [1] Wouter Kool, Herke van Hoof, and Max Welling. (2019). "Attention, learn to solve routing problems!" 
 
     """
-    
-    
+     
     def __init__(
         self,
-        generator: Optional[generator.Generator] = None,
-        reward_fn: Optional[reward.RewardFn] = None,
-        viewer: Optional[Viewer[types_.State]] = None,
+        generator: Optional[Generator] = None,
+        reward_fn: Optional[RewardFn] = None,
+        viewer: Optional[Viewer[State]] = None,
     ):
         """Instantiates an OP environment.
         
@@ -104,21 +106,19 @@ class OP(Environment[types_.State]):
         """
         
         
-        self.generator = generator or generator.UniformGenerator(
+        self.generator = generator or UniformGenerator(
             num_nodes=20,
             max_length=2,
         )
         self.num_nodes = self.generator.num_nodes
         self.max_length = self.generator.max_length
-        self.reward_fn = reward_fn or reward.DenseReward()
+        self.reward_fn = reward_fn or DenseReward()
         self._viewer = viewer #or OPViewer(name="OP", render_mode="human")
-        
-        
+            
     def __repr__(self) -> str:
         return f"OP environment with {self.num_nodes} nodes and travel budget of {self.max_length}."
-    
-    
-    def reset(self, key: chex.PRNGKey) -> Tuple[types_.State, TimeStep[types_.Observation]]:
+     
+    def reset(self, key: chex.PRNGKey) -> Tuple[State, TimeStep[Observation]]:
            """Reset the environment.
            
            Args:
@@ -131,13 +131,12 @@ class OP(Environment[types_.State]):
                 by the environment.     
            """
            state = self.generator(key)
-           timestep = restart(observation=self.__state_to_observation(state))
+           timestep = restart(observation=self._state_to_observation(state))
            return state, timestep
-       
-       
+         
     def step(
-        self, state: types_.State, action: chex.Numeric
-    ) -> Tuple[types_.State, TimeStep[types_.Observation]]:
+        self, state: State, action: chex.Numeric
+    ) -> Tuple[State, TimeStep[Observation]]:
         """Run one timestep of the environment's dynamics.
         
         
@@ -176,8 +175,7 @@ class OP(Environment[types_.State]):
         )
         return next_state, timestep
     
-    
-    def observation_spec(self) -> specs.Spec[types_.Observation]:
+    def observation_spec(self) -> specs.Spec[Observation]:
         """"Returns the observation spec.
         
         Returns:
@@ -231,7 +229,7 @@ class OP(Environment[types_.State]):
             name="action_mask",
         )
         return specs.Spec(
-            types_.Observation,
+            Observation,
             "ObservationSpec",
             coordinates=coordinates,
             position=position,
@@ -241,8 +239,7 @@ class OP(Environment[types_.State]):
             remaining_max_length=remaining_max_length,
             action_mask=action_mask,
         )
-        
-        
+           
     def action_spec(self) -> specs.DiscreteArray:
         """"Returns the action spec.
         
@@ -258,9 +255,8 @@ class OP(Environment[types_.State]):
     #def animate(self)
     
     #def close(self)
-    
-    
-    def _update_state(self, state: types_.State, action: chex.Numeric) -> types_.State:
+     
+    def _update_state(self, state: State, action: chex.Numeric) -> State:
         """
         Updates the state of the environment.
         
@@ -272,7 +268,7 @@ class OP(Environment[types_.State]):
             state: State object corresponding to the new state of the environment.    
         """  
         
-        return types_.State(
+        return State(
             coordinates=state.coordinates,
             position=state.position,
             visited_mask=state.visited_mask.at[action].set(True),
@@ -285,8 +281,7 @@ class OP(Environment[types_.State]):
             
         )
         
-     
-    def _state_to_observation(self, state: types_.State) -> types_.Observation:
+    def _state_to_observation(self, state: State) -> Observation:
         """Converts a state to an observation.
         
         Args:
@@ -301,7 +296,7 @@ class OP(Environment[types_.State]):
         # enough travel budget to cover the node's length to the depot
         action_mask = ~state.visited_mask & (state.length < state.remaining_max_length)
         
-        return types_.Observation(
+        return Observation(
             coordinates=state.coordinates,
             position=state.position,
             trajectory=state.trajectory,
@@ -310,4 +305,3 @@ class OP(Environment[types_.State]):
             remaining_max_length=state.remaining_max_length,
             action_mask=action_mask,
         )
-        

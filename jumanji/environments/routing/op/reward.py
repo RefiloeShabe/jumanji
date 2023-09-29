@@ -3,22 +3,22 @@ import chex
 import jax
 import jax.numpy as jnp
 
-import types_
+from jumanji.environments.routing.op.types import State
 
 class RewardFn(abc.ABC):
     @abc.abstractmethod
     def __call__(
         self,
-        state: types_.State,
+        state: State,
         action: chex.Numeric,
-        next_state: types_.State,
+        next_state: State,
         is_valid: bool,
     ) -> chex.Numeric:
-        """Compute the reward based on the current state, the chosen action, the next state 
-        and whether the action is valid.
+        """Compute the reward based on the current state, the chosen action, the next 
+        state and whether the action is valid.
         """
-        
-        
+
+     
 class SparseReward(RewardFn):
     """The total prize collected at the end of the episode. The total prize is defined as
     the sum of the prizes from each visited node within the time constraint. 
@@ -29,8 +29,8 @@ class SparseReward(RewardFn):
     
     def __call__(
         self,
-        state: types_.State,
-        next_state: types_.State,
+        state: State,
+        next_state: State,
         is_valid: bool,
         is_done: bool,
     )  -> chex.Numeric:
@@ -62,7 +62,7 @@ class DenseReward(RewardFn):
     
     def __call__(
         self, 
-        state: types_.State, 
+        state: State, 
         action: chex.Array, 
         is_valid: bool
     ) -> chex.Numeric:

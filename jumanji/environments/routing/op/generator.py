@@ -3,7 +3,8 @@ import chex
 import jax
 import jax.numpy as jnp
 
-import types_, constants
+from jumanji.environments.routing.op.types import State
+from jumanji.environments.routing.op.constants import DEPOT_IDX
 
 class Generator(abc.ABC):
     """
@@ -24,14 +25,53 @@ class Generator(abc.ABC):
         
       
     @abc.abstractmethod
-    def __call__(self, key: chex.PRNGKey) -> types_.State:
+    def __call__(self, key: chex.PRNGKey) -> State:
         """Call method responsible for generating a new state.
         Args:
-            key: jax random key in case stochasticity is used in the instance generation process
+            key: jax random key in case stochasticity is used in the instance generation
+            process
             
         Returns:
             An 'OP' environment state.
         """    
+        
+    def generate_base_attributes(self, key: chex.PRNGKey):  
+        key, coordinates_key, length_key = jax.random.split(key, num=3)
+        
+        # Randomly sample the coordinates of the nodes
+        coordinates = jax.random.uniform(
+            coordinates_key, (self.num_nodes + 1, 2), minval=0, maxval=1
+        )  
+        
+        # The initial position is set at the depot
+        position = jnp.array(DEPOT_IDX, jnp.int32)
+        
+        # Initially, the agent has ony visited the depot
+        visited_mask = jnp.zeros(self.num_nodes + 1, dtype=bool).at[DEPOT_IDX].set(True)
+        trajectory = jnp.full(self.num_nodes, DEPOT_IDX, jnp.int32)
+        
+        # The number of visited nodes
+        num_visited = jnp.array(1, jnp.int32)
+        
+        # Randomly sample the length of nodes from the depot
+        length = jax.random.uniform(
+            length_key, (self.num_nodes + 1, ), minval=0, maxval=2)
+        
+        # Set depot length to 0 --> length between depot and depot is 0
+        length = length.at[DEPOT_IDX].set(0)
+        
+        # The remaining travel budget
+        remaining_max_length = jnp.array(self.max_length, float)  
+        
+        return coordinates, position, visited_mask, trajectory, num_visited, length, remaining_max_length, key
+    
+    def generate_prizes(self, key: chex.PRNGKey):
+        _, _, _, _, _, length, _, _ = self.generate_base_attributes(key)
+        
+        # Compute prizes -> prizes are propotional to the distance to the depot, set prize to 0 at depot 
+        prizes = 0.01 + (0.99 * length / jnp.max(length)).at[DEPOT_IDX].set(0)
+        
+        return prizes      
         
         
 class ConstantGenerator(Generator):
@@ -43,50 +83,11 @@ class ConstantGenerator(Generator):
     randomly sampled from the interval (0, max_length).
     """
     
-    def __init__(self, num_nodes: int, max_length: int):
-        """Instantiates a 'ConstantGenerator'.
+    def __call__(self, key: chex.PRNGKey) -> State:
+        coordinates, position, visited_mask, trajectory, num_visited, length, remaining_max_length, key = self.generate_base_attributes(key)
+        prizes = jnp.ones(self.num_nodes + 1).at[DEPOT_IDX].set(0)
         
-        Args:
-            num_nodes (int): the number of nodes in the problem instance.
-            max_length (int): the maximum length of the tour
-        """        
-        super().__init__(num_nodes, max_length)
-        
-        
-    def __call__(self, key: chex.PRNGKey) -> types_.State:
-        key, coordinates_key, length_key = jax.random.split(key, num=3)
-        
-        # Randomly sample the coordinates of the nodes
-        coordinates = jax.random.uniform(
-            coordinates_key, (self.num_nodes + 1, 2), minval=0, maxval=1
-        )  
-        
-        # The initial position is set at the depot
-        position = jnp.array(constants.DEPOT_IDX, jnp.int32)
-        
-        # Initially, the agent has ony visited the depot
-        visited_mask = jnp.zeros(self.num_nodes + 1, dtype=bool).at[constants.DEPOT_IDX].set(True)
-        trajectory = jnp.full(self.num_nodes, constants.DEPOT_IDX, jnp.int32)
-        
-        # The number of visited nodes
-        num_visited = jnp.array(1, jnp.int32)
-        
-        # All nodes have the same costant prize 
-        prizes = jnp.ones(self.num_nodes + 1)
-        
-        # Randomly sample the length of nodes from the depot
-        length = jax.random.uniform(
-            length_key, (self.num_nodes + 1, ), minval=0, maxval=2)
-        
-        
-        # Set depot prize and lenght to 0 --> length between depot and depot is 0
-        prizes = prizes.at[constants.DEPOT_IDX].set(0)
-        length = length.at[constants.DEPOT_IDX].set(0)
-        
-        # The remaining travel budget
-        remaining_max_length = jnp.array(self.max_length, float)
-        
-        state = types_.State(
+        state = State(
             coordinates=coordinates,
             position=position,
             visited_mask=visited_mask,
@@ -101,40 +102,36 @@ class ConstantGenerator(Generator):
         return state
     
 
-class UniformGenerator(ConstantGenerator):
+class UniformGenerator(Generator):
     """Instance generator that generates a random uniform instance of the orienteering problem.
     Given the number of nodes and maximum route length, the generator works as follows: the 
     coordinates of the nodes (including the depot) and the prizes are randomly sampled from a 
     uniform distribution of the unit square. The prize at the depot is 0. The length between the 
     depot and the nodes is randomly sampled from the interval (0, max_length).
     """
-    
-    def __init__(self, num_nodes: int, max_length: int):
-        """Instantiates a 'UniformGenerator'.
-        
-        Args:
-            num_nodes (int): the number of nodes in the problem instance.
-            max_length (int): the maximum length of the tour
-        """        
-        super().__init__(num_nodes, max_length)
-        
-        
-    def __call__(self, key: chex.PRNGKey) -> types_.State:
-        state = super().__call__(key)
-        
-        key, prizes_key = jax.random.split(key)
-        
-        # Randomly sample the prizes 
+         
+    def __call__(self, key: chex.PRNGKey) -> State:
+        coordinates, position, visited_mask, trajectory, num_visited, length, remaining_max_length, key = self.generate_base_attributes(key)
+        key, prize_key = jax.random.split(key)
         prizes = jax.random.uniform(
-            prizes_key, (self.num_nodes + 1, ), minval=0, maxval=1)
+            prize_key, (self.num_nodes + 1, ), minval=0, maxval=1).at[DEPOT_IDX].set(0)
         
-        # Set depot prize and lenght to 0 --> length between depot and depot is 0
-        prizes = prizes.at[constants.DEPOT_IDX].set(0)
+        state = State(
+            coordinates=coordinates,
+            position=position,
+            visited_mask=visited_mask,
+            trajectory=trajectory,
+            num_visited=num_visited,
+            prizes=prizes,
+            length=length,
+            remaining_max_length=remaining_max_length,
+            key=key,
+        )
         
-        return state._replace(prizes=prizes, key=key)
+        return state  
+          
     
-    
-class ProportionalGenerator(ConstantGenerator):
+class ProportionalGenerator(Generator):
     """Instance generator that generates an instance of the orienteering problem where every node
     has a prize that is proportional to the distance to the depot. Given the number of nodes and 
     maximum route length, the generator works as follows: the  coordinates of the nodes (including the depot) 
@@ -143,25 +140,21 @@ class ProportionalGenerator(ConstantGenerator):
     discretized proportion of the length between the depot and the nodes.
     """
     
-    def __init__(self, num_nodes: int, max_length: int):
-        """Instantiates a 'ProportionalGenerator'.
+    def __call__(self, key: chex.PRNGKey) -> State:
+        key, prize_key = jax.random.split(key)
+        coordinates, position, visited_mask, trajectory, num_visited, length, remaining_max_length, key = self.generate_base_attributes(key)
+        prizes = self.generate_prizes(prize_key)
         
-        Args:
-            num_nodes (int): the number of nodes in the problem instance.
-            max_length (int): the maximum length of the tour
-        """        
-        super().__init__(num_nodes, max_length)
+        state = State(
+            coordinates=coordinates,
+            position=position,
+            visited_mask=visited_mask,
+            trajectory=trajectory,
+            num_visited=num_visited,
+            prizes=prizes,
+            length=length,
+            remaining_max_length=remaining_max_length,
+            key=key,
+        )
         
-        
-    def __call__(self, key: chex.PRNGKey) -> types_.State:
-        state = super().__call__(key)
-        
-        key = jax.random.PRNGKey(key)
-        
-        # Compute prizes -> prizes are propotional to the distance to the depot 
-        prizes = 0.01 + (0.99 * state.length / jnp.max(state.length))
-        
-        # Set depot prize and lenght to 0 --> length between depot and depot is 0
-        prizes = prizes.at[constants.DEPOT_IDX].set(0)
-        
-        return state._replace(prizes=prizes, key=key)        
+        return state             
