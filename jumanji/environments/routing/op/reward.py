@@ -5,6 +5,7 @@ import jax.numpy as jnp
 
 from jumanji.environments.routing.op.types import State
 
+
 class RewardFn(abc.ABC):
     @abc.abstractmethod
     def __call__(

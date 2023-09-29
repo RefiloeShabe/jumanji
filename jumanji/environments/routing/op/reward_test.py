@@ -3,6 +3,7 @@ import jax.numpy as jnp
 
 import env, reward
 
+
 def test_dense_reward(op_dense_reward: env.OP, dense_reward: reward.DenseReward) -> None:
     dense_reward = jax.jit(dense_reward)
     step_fn = jax.jit(op_dense_reward.step)
@@ -19,8 +20,7 @@ def test_dense_reward(op_dense_reward: env.OP, dense_reward: reward.DenseReward)
     next_state, _ = step_fn(state, 0)  
     penalty = -jnp.sqrt(2) * op_dense_reward.num_nodes
     assert dense_reward(state, 0, next_state, is_valid=False) == penalty
-    
-    
+     
 def test_sparse_reward(
     op_sparse_reward: env.OP, sparse_reward: reward.SparseReward
 )  -> None:
@@ -52,4 +52,3 @@ def test_sparse_reward(
                     sparse_reward(state, action, invalid_next_state, is_valid) == penalty
                 )
         state = next_state                    
-                    

@@ -121,4 +121,4 @@ class TestProportionalGenerator:
         assert isinstance(state1, State)
         
         state2 = call_fn(key=jax.random.PRNGKey(2))
-        assert_trees_are_different(state1, state2)                 
+        assert_trees_are_different(state1, state2)
