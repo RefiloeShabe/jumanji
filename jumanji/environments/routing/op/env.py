@@ -1,90 +1,93 @@
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Tuple
 
 import chex
 import jax
 import jax.numpy as jnp
-import matplotlib
-from chex import PRNGKey
-from numpy.typing import NDArray
 
 
-import jumanji
 from jumanji import specs
 from jumanji.env import Environment
 from jumanji.types import TimeStep, restart, termination, transition
 from jumanji.viewer import Viewer
-from jumanji.environments.routing.op.generator import ConstantGenerator, UniformGenerator, ProportionalGenerator
+from jumanji.environments.routing.op.generator import Generator, UniformGenerator
 from jumanji.environments.routing.op.types import State, Observation
-from jumanji.environments.routing.op.reward import DenseReward, SparseReward 
-from jumanji.environments.routing.op.constants import DEPOT_IDX 
+from jumanji.environments.routing.op.reward import DenseReward, RewardFn
+
+# from jax.config import config
+# config.update('jax_disable_jit', True)
 
 
 class OP(Environment[State]):
     """ Orienteering Problem (OP) as described in [1].
-    
+
     - observation: Observation
         - coordinates: jax array (float) of shape (num_nodes + 1, 2)
             the coordinates of each node.
         - position: jax array (int32) of shape ()
-            the indec corresponding to the last visited node 
+            the indec corresponding to the last visited node
         - trajectory: jax array (int32) of shape (num_nodes, )
-            array of node indicies defining the route (set to DEPOT_IDX if not filled yet)
+            array of node indicies defining the route (set to DEPOT_IDX if not filled
+            yet)
         - action_mask: jax array (bool) of shape (num_nodes + 1, )
             binary mask (False/True <--> illegal/legal <--> can/cannot be visited)
-        - prizes: jax array (float) of shape (num_nodes + 1, ), could be either: 
-            - constant: all nodes have the same prize equal to 1. 
-            - uniform: the prizes of the nodes are randomly sampled from a uniform distribution
-              on a unit square.
-            - proportional: the prizes of the nodes are proportional to the length between the 
-              depot and the nodes.                       
+        - prizes: jax array (float) of shape (num_nodes + 1, ), could be either:
+            - constant: all nodes have the same prize equal to 1.
+            - uniform: the prizes of the nodes are randomly sampled from a uniform
+            distribution on a unit square.
+            - proportional: the prizes of the nodes are proportional to the length
+            between the depot and the nodes.
         - length: jax array (float) of shape (num_nodes + 1, )
-            the length between each node and the depot (0.0 for the depot)     
-            
-    
+            the length between each node and the depot (0.0 for the depot)
+
+
     - action: jax array (int32) of shape ()
-        [0, ..., num_nodes] -> nodes to visit. 0 corresponding to visiting the depot. 
-         
-        
+        [0, ..., num_nodes] -> nodes to visit. 0 corresponding to visiting the depot.
+
+
     - reward: jax array (float) of shape (), could be either:
         - dense: the prize associated with the chosen next node to go to.
-            It is 0 for the first chosen node and the last node. 
-        - sparse: the total prize collect at the end of the episode. The total 
-            prize is defined as the sum of prizes associated with visited nodes in a episode.
-            It is computed by starting at the first node and ending there, visiting a subset 
-            of all nodes.
-        In both cases, the reward is zero is the action is invalid, i.e. a previsouly selected 
-        node is selected again or it is too far to make it to the depot in given time.
-        
-        
+            It is 0 for the first chosen node and the last node.
+        - sparse: the total prize collect at the end of the episode. The total
+            prize is defined as the sum of prizes associated with visited nodes in an
+            episode.
+            It is computed by starting at the first node and ending there, visiting a
+            subset of all nodes.
+        In both cases, the reward is zero is the action is invalid, i.e. a previsouly
+        selected node is selected again or it is too far to make it to the depot in
+        given time.
+
+
     - episode termination:
         - if no action can be performed, i.e. the remaining time budget is zero.
-        - if an invalid action is taken, i.e. an already visited is chosen or 
+        - if an invalid action is taken, i.e. an already visited is chosen or
             a chosen node is too far to reach the depot within the time budget.
-            
-    
+
+
     - state: 'State'
         - coordinates: jax array (float) of shape (num_nodes + 1, 2)
             the coordinates of each node.
         - position: jax array (int32) of shape ()
-            the index corresponding to the last visited node. 
+            the index corresponding to the last visited node.
         - visited_mask: jax array (bool) of shape (num_nodes + 1, )
-            binary mask (False/True <--> not visited/visited).    
+            binary mask (False/True <--> not visited/visited).
         - trajectory: jax array (int32) of shape (num_nodes, )
-            array of node indicies defining the route (set to DEPOT_IDX if not filled yet).
+            array of node indicies defining the route (set to DEPOT_IDX if not filled
+            yet).
         - num_visited: int32
                 number of total nodes visited
-        - prizes: jax array (float) of shape (num_nodes + 1, ) 
+        - prizes: jax array (float) of shape (num_nodes + 1, )
             the associated prizez of each node and the depot note (0.0 for the depot)
         - length: jax array (float) of shape (num_nodes + 1, )
-            the length between each node and the depot (0.0 for the depot)  
+            the length between each node and the depot (0.0 for the depot)
         -remaining_max_length: jax array (float) of shape ()
-            the remaining length budget  
-            
-    
-    [1] Wouter Kool, Herke van Hoof, and Max Welling. (2019). "Attention, learn to solve routing problems!" 
+            the remaining length budget
+
+
+    [1] Wouter Kool, Herke van Hoof, and Max Welling. (2019). "Attention, learn to
+    solve routing problems!"
 
     """
-     
+
     def __init__(
         self,
         generator: Optional[Generator] = None,
@@ -92,65 +95,65 @@ class OP(Environment[State]):
         viewer: Optional[Viewer[State]] = None,
     ):
         """Instantiates an OP environment.
-        
-        
+
+
         Args:
-            generator: 'Generator' whose '__call__' method instantiates an environment instance.
-                The default option is 'UniformGenerator' which randomly generates OP instances 
-                with 20 nodes and prizes sampled from a uniform distribution .
-            reward_fn: RewardFn whose '__call__' method computes the reward of an environment
-                transition. The function must compute the reward based on the current state,
-                the chosen action and the next state.
-                Implement options are ['DenseReward', 'SparseReward']. Defaults to 'DenseReward'.
-            viewer: 'Viewer' used for rendering. Defaults to the 'OPViewer' with 'human' render mode.   
+            generator: 'Generator' whose '__call__' method instantiates an environment
+            instance. The default option is 'UniformGenerator' which randomly generates
+            OP instances with 20 nodes and prizes sampled from a uniform distribution.
+            reward_fn: RewardFn whose '__call__' method computes the reward of an
+            environment transition. The function must compute the reward based on the
+            current state, the chosen action and the next state. Implement options are
+            ['DenseReward', 'SparseReward']. Defaults to 'DenseReward'.
+            viewer: 'Viewer' used for rendering. Defaults to the 'OPViewer' with 'human'
+            render mode.
         """
-        
-        
+
         self.generator = generator or UniformGenerator(
             num_nodes=20,
-            max_length=2,
+            max_length=10,
         )
         self.num_nodes = self.generator.num_nodes
         self.max_length = self.generator.max_length
         self.reward_fn = reward_fn or DenseReward()
-        self._viewer = viewer #or OPViewer(name="OP", render_mode="human")
-            
+        self._viewer = viewer  # or OPViewer(name="OP", render_mode="human")
+
     def __repr__(self) -> str:
         return f"OP environment with {self.num_nodes} nodes and travel budget of {self.max_length}."
-     
+
     def reset(self, key: chex.PRNGKey) -> Tuple[State, TimeStep[Observation]]:
-           """Reset the environment.
-           
-           Args:
-                Key: used to randomly generate the coordinates.
-                
-                
-           Returns:
-                state: State object corresponding to the new state of the environment.
-                timestep: Timestep object corresponding to the first timestep returned 
-                by the environment.     
-           """
-           state = self.generator(key)
-           timestep = restart(observation=self._state_to_observation(state))
-           return state, timestep
-         
+        """Reset the environment.
+
+        Args:
+            Key: used to randomly generate the coordinates.
+
+
+        Returns:
+            state: State object corresponding to the new state of the environment.
+            timestep: Timestep object corresponding to the first timestep returned
+            by the environment.
+        """
+        state = self.generator(key)
+        timestep = restart(observation=self._state_to_observation(state))
+        return state, timestep
+
     def step(
         self, state: State, action: chex.Numeric
     ) -> Tuple[State, TimeStep[Observation]]:
         """Run one timestep of the environment's dynamics.
-        
-        
+
+
         Args:
             state: 'State' object containing the dynamics of the environment.
             action: 'Array' containing the index of the next node to visit.
-            
-            
+
+
         Returns:
             state: the next state of the environment.
             timestep: the timestep to be observed.    
         """
-        # Valid if node has not been visited and/or there is sufficient travel budget
-        is_valid = ~state.visited_mask[action] & (state.length[action] < state.remaining_max_length)
+        travelled_distance = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates[action])
+        is_valid = ~state.visited_mask[action] & (state.length[action] <= state.remaining_max_length - travelled_distance)
 
         next_state = jax.lax.cond(
             is_valid,
@@ -159,13 +162,14 @@ class OP(Environment[State]):
             state,
             action,
         )
-        
+
         reward = self.reward_fn(state, action, next_state, is_valid)
+
         observation = self._state_to_observation(next_state)
-        
-        # Terminate if all the travel budget is used up or the action is invalid
-        is_done = (state.remaining_max_length == next_state.length[action]) | ~is_valid
-        
+
+        # Terminate if there are no nodes to visit or the action is invalid
+        is_done = next_state.visited_mask.all() | ~is_valid
+
         timestep = jax.lax.cond(
             is_done,
             termination,
@@ -174,10 +178,10 @@ class OP(Environment[State]):
             observation,
         )
         return next_state, timestep
-    
+
     def observation_spec(self) -> specs.Spec[Observation]:
         """"Returns the observation spec.
-        
+
         Returns:
             Spec for the 'Observation' whose fields are:
             - coordinates: BoundedArray (float) of shape (num_nodes + 1, ).
@@ -186,7 +190,7 @@ class OP(Environment[State]):
             - prizes: BoundedArray (float) of shape (num_nodes + 1, ).
             - length: BoundedArray (float) of shape (num_nodes + 1, ).
             - action_mask: BoundedArray (bool) of shape (num_nodes + 1, )
-        """   
+        """
         coordinates = specs.BoundedArray(
             shape=(self.num_nodes + 1, 2),
             minimum=0.0,
@@ -195,31 +199,31 @@ class OP(Environment[State]):
             name="coordinates",
         )
         position = specs.DiscreteArray(
-            self.num_nodes, dtype=jnp.int32, name="position"
+            self.num_nodes + 1, dtype=jnp.int32, name="position"
         )
         trajectory = specs.BoundedArray(
-            shape=(self.num_nodes, ),
+            shape=(self.num_nodes + 1, ),
             dtype=jnp.int32,
             minimum=0,
-            maximum=self.num_nodes,
+            maximum=self.num_nodes + 1,
             name="trajectory",
         )
         prizes = specs.BoundedArray(
             shape=(self.num_nodes + 1, ),
             minimum=0.0,
-            maximum=1.0,
+            maximum=self.max_length,
             dtype=float,
             name="prizes",
         )
         length = specs.BoundedArray(
             shape=(self.num_nodes + 1, ),
             minimum=0.0,
-            maximum=2.0,
+            maximum=self.max_length,
             dtype=float,
             name="length"
         )
         remaining_max_length = specs.BoundedArray(
-            shape=(), minimum=0.0, maximum=2.0, dtype=float, name="remaining_max_length"
+            shape=(), minimum=0.0, maximum=self.max_length, dtype=float, name="remaining_max_length"
         )
         action_mask = specs.BoundedArray(
             shape=(self.num_nodes + 1, ),
@@ -239,63 +243,59 @@ class OP(Environment[State]):
             remaining_max_length=remaining_max_length,
             action_mask=action_mask,
         )
-           
+
     def action_spec(self) -> specs.DiscreteArray:
         """"Returns the action spec.
-        
+
         Returns:
             action_spec: a 'specs.DiscreteArray' array.
         """
-        
+
         return specs.DiscreteArray(self.num_nodes + 1, name="action")
-    
-    
-    #def render(self)
-    
-    #def animate(self)
-    
-    #def close(self)
-     
+
     def _update_state(self, state: State, action: chex.Numeric) -> State:
         """
         Updates the state of the environment.
-        
+
         Args:
             state: State object containing the dynamics of the environment.
             action: int32, index of the next position to visit.
-            
+
         Returns:
-            state: State object corresponding to the new state of the environment.    
-        """  
-        
+            state: State object corresponding to the new state of the environment.
+        """
+
+        # compute traveled distance: distance between previous node and currrent node
+        travelled_distance = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates[action])
+
         return State(
             coordinates=state.coordinates,
-            position=state.position,
+            position=action,
             visited_mask=state.visited_mask.at[action].set(True),
             trajectory=state.trajectory.at[state.num_visited].set(action),
             num_visited=state.num_visited + 1,
             prizes=state.prizes,
-            length=state.prizes,
-            remaining_max_length=state.remaining_max_length - state.length[action],
+            length=state.length,
+            remaining_max_length=state.remaining_max_length - travelled_distance,
             key=state.key,
-            
+
         )
-        
+
     def _state_to_observation(self, state: State) -> Observation:
         """Converts a state to an observation.
-        
+
         Args:
         state: State object containing the dynamics of the environment.
-        
-        
+
+
     Returns:
-        observation: Observation object containing the observation of the environment.    
-        """  
-         
-        # a node is reachable if it has not been visited already or if there is 
+        observation: Observation object containing the observation of the environment.
+        """
+
+        # a node is reachable if it has not been visited already or if there is
         # enough travel budget to cover the node's length to the depot
         action_mask = ~state.visited_mask & (state.length < state.remaining_max_length)
-        
+
         return Observation(
             coordinates=state.coordinates,
             position=state.position,
