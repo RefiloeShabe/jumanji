@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 
 from jumanji.environments.routing.op.types import State
+from jumanji.environments.routing.op.constants import DEPOT_IDX
 
 
 class RewardFn(abc.ABC):
@@ -44,7 +45,7 @@ class SparseReward(RewardFn):
         )
 
         # If the episode is done
-        is_done = next_state.visited_mask.all() | ~is_valid
+        is_done = next_state.visited_mask[DEPOT_IDX] | ~is_valid | next_state.visited_mask.all()
         reward = jax.lax.cond(
             is_done,
             compute_sparse_reward,

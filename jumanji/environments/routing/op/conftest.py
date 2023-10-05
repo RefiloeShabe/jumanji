@@ -59,7 +59,7 @@ class DummyGenerator(Generator):
             A OP State
         """
         coordinates = jnp.array(
-            [[0.0, 0.0], [0.0, 0.5], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.5, 0.5]],
+            [[0.0, 0.0], [0.0, 0.5], [0.0, 1.0], [1.0, 0.0], [1.0, 1.0]],
             float,
         )
 
@@ -68,15 +68,15 @@ class DummyGenerator(Generator):
         num_visited = jnp.array(1, jnp.int32)
 
         # The prize and length at depot is 0
-        length = jnp.array([0, 0.05, 0.07, 0.07, 0.11, 0.1])
+        length = jnp.array([0, 0.07, 0.07, 0.11, 0.15])
         prizes = self._generate_prizes(key, length)
 
         # The initial travel budget (max length)
         remaining_max_length = jnp.array(0.4, jnp.int32)
 
         # Initially the agent has only visited the depot.
-        visited_mask = jnp.array([True, False, False, False, False, False], bool)
-        trajectory = jnp.array([0, 0, 0, 0, 0, 0], jnp.int32)
+        visited_mask = jnp.array([True, False, False, False, False], bool)
+        trajectory = jnp.array([0, 0, 0, 0, 0], jnp.int32)
 
         del key
 
@@ -105,6 +105,6 @@ class DummyGenerator(Generator):
         Returns:
             prizes: the prizes associated with nodes to be visited.
         """
-        prizes = jnp.array([0, 0.05, 0.07, 0.08, 0.11, 0.1])
+        prizes = jnp.array([0, 0.07, 0.08, 0.11, 0.15])
 
         return prizes

@@ -9,6 +9,7 @@ from jumanji import specs
 from jumanji.env import Environment
 from jumanji.types import TimeStep, restart, termination, transition
 from jumanji.viewer import Viewer
+from jumanji.environments.routing.op.constants import DEPOT_IDX
 from jumanji.environments.routing.op.generator import Generator, UniformGenerator
 from jumanji.environments.routing.op.types import State, Observation
 from jumanji.environments.routing.op.reward import DenseReward, RewardFn
@@ -21,22 +22,22 @@ class OP(Environment[State]):
     """ Orienteering Problem (OP) as described in [1].
 
     - observation: Observation
-        - coordinates: jax array (float) of shape (num_nodes + 1, 2)
+        - coordinates: jax array (float) of shape (num_nodes, 2)
             the coordinates of each node.
         - position: jax array (int32) of shape ()
             the indec corresponding to the last visited node
         - trajectory: jax array (int32) of shape (num_nodes, )
             array of node indicies defining the route (set to DEPOT_IDX if not filled
             yet)
-        - action_mask: jax array (bool) of shape (num_nodes + 1, )
+        - action_mask: jax array (bool) of shape (num_nodes, )
             binary mask (False/True <--> illegal/legal <--> can/cannot be visited)
-        - prizes: jax array (float) of shape (num_nodes + 1, ), could be either:
+        - prizes: jax array (float) of shape (num_nodes, ), could be either:
             - constant: all nodes have the same prize equal to 1.
             - uniform: the prizes of the nodes are randomly sampled from a uniform
             distribution on a unit square.
             - proportional: the prizes of the nodes are proportional to the length
             between the depot and the nodes.
-        - length: jax array (float) of shape (num_nodes + 1, )
+        - length: jax array (float) of shape (num_nodes, )
             the length between each node and the depot (0.0 for the depot)
 
 
@@ -152,8 +153,10 @@ class OP(Environment[State]):
             state: the next state of the environment.
             timestep: the timestep to be observed.    
         """
+
         travelled_distance = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates[action])
-        is_valid = ~state.visited_mask[action] & (state.length[action] <= state.remaining_max_length - travelled_distance)
+        valid_length = state.remaining_max_length - travelled_distance
+        is_valid = ~state.visited_mask[action] & (state.length[action] <= valid_length)
 
         next_state = jax.lax.cond(
             is_valid,
@@ -167,8 +170,10 @@ class OP(Environment[State]):
 
         observation = self._state_to_observation(next_state)
 
-        # Terminate if there are no nodes to visit or the action is invalid
-        is_done = next_state.visited_mask.all() | ~is_valid
+        # Terminate if visit depot or the action is invalid or there are no nodes to visit 
+        is_done = next_state.visited_mask[DEPOT_IDX] | ~is_valid | next_state.visited_mask.all()
+
+        # is_done = next_state.visited_mask.all() | ~is_valid
 
         timestep = jax.lax.cond(
             is_done,
@@ -192,31 +197,31 @@ class OP(Environment[State]):
             - action_mask: BoundedArray (bool) of shape (num_nodes + 1, )
         """
         coordinates = specs.BoundedArray(
-            shape=(self.num_nodes + 1, 2),
+            shape=(self.num_nodes, 2),
             minimum=0.0,
             maximum=1.0,
             dtype=float,
             name="coordinates",
         )
         position = specs.DiscreteArray(
-            self.num_nodes + 1, dtype=jnp.int32, name="position"
+            self.num_nodes, dtype=jnp.int32, name="position"
         )
         trajectory = specs.BoundedArray(
-            shape=(self.num_nodes + 1, ),
+            shape=(self.num_nodes, ),
             dtype=jnp.int32,
             minimum=0,
-            maximum=self.num_nodes + 1,
+            maximum=self.num_nodes,
             name="trajectory",
         )
         prizes = specs.BoundedArray(
-            shape=(self.num_nodes + 1, ),
+            shape=(self.num_nodes, ),
             minimum=0.0,
             maximum=self.max_length,
             dtype=float,
             name="prizes",
         )
         length = specs.BoundedArray(
-            shape=(self.num_nodes + 1, ),
+            shape=(self.num_nodes, ),
             minimum=0.0,
             maximum=self.max_length,
             dtype=float,
@@ -226,7 +231,7 @@ class OP(Environment[State]):
             shape=(), minimum=0.0, maximum=self.max_length, dtype=float, name="remaining_max_length"
         )
         action_mask = specs.BoundedArray(
-            shape=(self.num_nodes + 1, ),
+            shape=(self.num_nodes, ),
             dtype=bool,
             minimum=False,
             maximum=True,
@@ -251,7 +256,7 @@ class OP(Environment[State]):
             action_spec: a 'specs.DiscreteArray' array.
         """
 
-        return specs.DiscreteArray(self.num_nodes + 1, name="action")
+        return specs.DiscreteArray(self.num_nodes, name="action")
 
     def _update_state(self, state: State, action: chex.Numeric) -> State:
         """
@@ -268,10 +273,13 @@ class OP(Environment[State]):
         # compute traveled distance: distance between previous node and currrent node
         travelled_distance = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates[action])
 
+        # Set depot to False (valid to visit) since it can be visited again
+        visited_mask = state.visited_mask.at[DEPOT_IDX].set(False)
+
         return State(
             coordinates=state.coordinates,
             position=action,
-            visited_mask=state.visited_mask.at[action].set(True),
+            visited_mask=visited_mask.at[action].set(True),
             trajectory=state.trajectory.at[state.num_visited].set(action),
             num_visited=state.num_visited + 1,
             prizes=state.prizes,
@@ -281,20 +289,29 @@ class OP(Environment[State]):
 
         )
 
+    def _action_mask(self, state: State) -> chex.Array:
+        """Defines a mask for actions that are not valid"""
+
+        # Calculate distances from the current position to all other coordinates
+        distances = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates, axis=-1)
+        valid_lengths = state.remaining_max_length - distances
+        action_mask = (~state.visited_mask) & (state.length <= valid_lengths)
+
+        # The depot is reachable if we are not at it already.
+        action_mask = action_mask.at[DEPOT_IDX].set(state.position != DEPOT_IDX)
+
+        return action_mask
+
     def _state_to_observation(self, state: State) -> Observation:
         """Converts a state to an observation.
 
         Args:
         state: State object containing the dynamics of the environment.
 
-
-    Returns:
-        observation: Observation object containing the observation of the environment.
+        Returns:
+            observation: Observation object containing the observation of the environment.
         """
-
-        # a node is reachable if it has not been visited already or if there is
-        # enough travel budget to cover the node's length to the depot
-        action_mask = ~state.visited_mask & (state.length < state.remaining_max_length)
+        action_mask = self._action_mask(state)
 
         return Observation(
             coordinates=state.coordinates,

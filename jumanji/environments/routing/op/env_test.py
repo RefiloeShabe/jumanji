@@ -56,7 +56,7 @@ class TestSparseOP:
         new_action = jax.random.randint(
             step_key, shape=(), minval=0, maxval=op_sparse_reward.num_nodes
         )
-        
+
         new_state, next_timestep = step_fn(state, new_action)
 
         # Check that the state has changed
@@ -73,7 +73,7 @@ class TestSparseOP:
         # Check that the state was correctly changed
         # number of visited nodes include the depot
         assert new_state.visited_mask[new_action] == 1
-        assert new_state.visited_mask.sum() == 2
+        assert new_state.visited_mask.sum() == 1
 
         # Check that the state does not change when taking the same action again
         state = new_state
@@ -103,18 +103,22 @@ class TestSparseOP:
         while not timestep.last():
             # Check that the budget remains positive
             assert state.remaining_max_length > 0
+            
+            # Check there are nodes that have not been selected
+            assert not state.visited_mask.all()
 
             # Check that the reward is 0 while trajectory is not done
             assert timestep.reward == 0
+            
+            next_position = (state.position % op_sparse_reward.num_nodes) + 1
+            valid_length = state.remaining_max_length - state.length[next_position]
+            if state.length[next_position] > valid_length:
+                next_position = DEPOT_IDX
 
-            action = jnp.argmax(timestep.observation.action_mask)
-            state, timestep = step_fn(state, action)
+            state, timestep = step_fn(state, next_position)
 
         # Check that the reward is positive when the trajectory is done
         assert timestep.reward > 0
-
-        # Check that no action can be taken: the remainining nodes are too far
-        assert not jnp.any(timestep.observation.action_mask)
         assert timestep.last()
 
     def test_op_sparse_invalid_action(self, op_sparse_reward: OP) -> None:
@@ -137,7 +141,7 @@ class TestSparseOP:
             state, timestep = step_fn(state, a)
 
         # Last action is invalid because it was already taken
-        assert timestep.reward == -(1 + op_sparse_reward.num_nodes) * jnp.sqrt(2)
+        assert timestep.reward == -(op_sparse_reward.num_nodes) * jnp.sqrt(2)
         assert timestep.last()
 
 
@@ -202,7 +206,7 @@ class TestDenseOP:
 
         # Check that the state was correctly changed
         assert new_state.visited_mask[new_action]
-        assert new_state.visited_mask.sum() == 2
+        assert new_state.visited_mask.sum() == 1
 
         # New step with same action should be invalid
         state = new_state
@@ -234,18 +238,25 @@ class TestDenseOP:
             # Check that the budget remains positive
             assert state.remaining_max_length > 0
 
+            # Check there are nodes that have not been selected
+            assert not state.visited_mask.all()
+
             # Check that the reward is positive at each but first step
             if state.num_visited == 1:
                 assert timestep.reward == 0
             else:
                 assert timestep.reward > 0
 
-            state, timestep = step_fn(
-                state, jnp.argmax(timestep.observation.action_mask)
-            )
+            next_position = (state.position % op_dense_reward.num_nodes) + 1
+            valid_length = state.remaining_max_length - state.length[next_position]
+            if state.length[next_position] > valid_length:
+                next_position = DEPOT_IDX
 
-        # Check that no action can be taken: the remainining nodes are too far
-        assert not jnp.any(timestep.observation.action_mask)
+            state, timestep = step_fn(state, next_position)
+
+        # Check that the reward is zero when the trajectory is done:
+        # that is reward is zero at the depot
+        assert timestep.reward == 0
         assert timestep.last()
 
     def test_op_dense_invalid_action(self, op_dense_reward: OP) -> None:
@@ -267,7 +278,7 @@ class TestDenseOP:
             assert timestep.reward > 0 or state.num_visited == 3
 
         # Last action is invalid because it was already taken
-        assert timestep.reward == -(1 + op_dense_reward.num_nodes) * jnp.sqrt(2)
+        assert timestep.reward == -(op_dense_reward.num_nodes) * jnp.sqrt(2)
         assert timestep.last()
 
 
