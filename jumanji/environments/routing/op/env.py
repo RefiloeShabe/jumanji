@@ -80,7 +80,7 @@ class OP(Environment[State]):
             the associated prizez of each node and the depot note (0.0 for the depot)
         - length: jax array (float) of shape (num_nodes + 1, )
             the length between each node and the depot (0.0 for the depot)
-        -remaining_max_length: jax array (float) of shape ()
+        -remaining_budget: jax array (float) of shape ()
             the remaining length budget
 
 
@@ -155,7 +155,7 @@ class OP(Environment[State]):
         """
 
         travelled_distance = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates[action])
-        valid_length = state.remaining_max_length - travelled_distance
+        valid_length = state.remaining_budget - travelled_distance
         is_valid = ~state.visited_mask[action] & (state.length[action] <= valid_length)
 
         next_state = jax.lax.cond(
@@ -227,8 +227,8 @@ class OP(Environment[State]):
             dtype=float,
             name="length"
         )
-        remaining_max_length = specs.BoundedArray(
-            shape=(), minimum=0.0, maximum=self.max_length, dtype=float, name="remaining_max_length"
+        remaining_budget = specs.BoundedArray(
+            shape=(), minimum=0.0, maximum=self.max_length, dtype=float, name="remaining_budget"
         )
         action_mask = specs.BoundedArray(
             shape=(self.num_nodes, ),
@@ -245,7 +245,7 @@ class OP(Environment[State]):
             trajectory=trajectory,
             prizes=prizes,
             length=length,
-            remaining_max_length=remaining_max_length,
+            remaining_budget=remaining_budget,
             action_mask=action_mask,
         )
 
@@ -284,7 +284,7 @@ class OP(Environment[State]):
             num_visited=state.num_visited + 1,
             prizes=state.prizes,
             length=state.length,
-            remaining_max_length=state.remaining_max_length - travelled_distance,
+            remaining_budget=state.remaining_budget - travelled_distance,
             key=state.key,
 
         )
@@ -294,7 +294,7 @@ class OP(Environment[State]):
 
         # Calculate distances from the current position to all other coordinates
         distances = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates, axis=-1)
-        valid_lengths = state.remaining_max_length - distances
+        valid_lengths = state.remaining_budget - distances
         action_mask = (~state.visited_mask) & (state.length <= valid_lengths)
 
         # The depot is reachable if we are not at it already.
@@ -319,6 +319,6 @@ class OP(Environment[State]):
             trajectory=state.trajectory,
             prizes=state.prizes,
             length=state.length,
-            remaining_max_length=state.remaining_max_length,
+            remaining_budget=state.remaining_budget,
             action_mask=action_mask,
         )

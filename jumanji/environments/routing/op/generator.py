@@ -56,7 +56,7 @@ class Generator(abc.ABC):
         prizes = self._generate_prizes(prize_key, length)
 
         # The remaining travel budget
-        remaining_max_length = jnp.array(self.max_length, float)
+        remaining_budget = jnp.array(self.max_length, float)
 
         state = State(
             coordinates=coordinates,
@@ -66,7 +66,7 @@ class Generator(abc.ABC):
             num_visited=num_visited,
             prizes=prizes,
             length=length,
-            remaining_max_length=remaining_max_length,
+            remaining_budget=remaining_budget,
             key=key,
         )
 

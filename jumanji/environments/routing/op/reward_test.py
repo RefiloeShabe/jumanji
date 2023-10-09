@@ -12,12 +12,10 @@ def test_dense_reward(op_dense_reward: OP, dense_reward: DenseReward) -> None:
 
     # check that the reward is correct for any node
     state, timestep = step_fn(state, 0)
-    # print(state.visited_mask, timestep.observation.action_mask)
     for action in range(1, op_dense_reward.num_nodes):
         next_state, _ = step_fn(state, action)
         node_prize = state.prizes[action]
         reward = dense_reward(state, action, next_state, is_valid=True)
-        # print(action, next_state.visited_mask, timestep.observation.action_mask)
         assert reward == node_prize
 
     # check the reward for invalid action

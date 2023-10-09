@@ -24,7 +24,7 @@ class TestSparseOP:
         # Initially the position is at depot;
         assert state.position == DEPOT_IDX
         # the current remaining travel length is max length
-        assert state.remaining_max_length == op_sparse_reward.max_length > 0.0
+        assert state.remaining_budget == op_sparse_reward.max_length > 0.0
         # Length from depot to depot is 0
         assert state.length[DEPOT_IDX] == 0.0
         # The depot is initially visited
@@ -62,7 +62,7 @@ class TestSparseOP:
         # Check that the state has changed
         assert not jnp.array_equal(new_state.position, state.position)
         assert not jnp.array_equal(
-            new_state.remaining_max_length, state.remaining_max_length
+            new_state.remaining_budget, state.remaining_budget
         )
         assert not jnp.array_equal(new_state.visited_mask, state.visited_mask)
         assert not jnp.array_equal(new_state.num_visited, state.num_visited)
@@ -81,7 +81,7 @@ class TestSparseOP:
 
         assert jnp.array_equal(new_state.position, state.position)
         assert jnp.array_equal(
-            new_state.remaining_max_length, state.remaining_max_length
+            new_state.remaining_budget, state.remaining_budget
         )
         assert jnp.array_equal(new_state.visited_mask, state.visited_mask)
         assert jnp.array_equal(new_state.num_visited, state.num_visited)
@@ -102,7 +102,7 @@ class TestSparseOP:
 
         while not timestep.last():
             # Check that the budget remains positive
-            assert state.remaining_max_length > 0
+            assert state.remaining_budget > 0
             
             # Check there are nodes that have not been selected
             assert not state.visited_mask.all()
@@ -111,7 +111,7 @@ class TestSparseOP:
             assert timestep.reward == 0
             
             next_position = (state.position % op_sparse_reward.num_nodes) + 1
-            valid_length = state.remaining_max_length - state.length[next_position]
+            valid_length = state.remaining_budget - state.length[next_position]
             if state.length[next_position] > valid_length:
                 next_position = DEPOT_IDX
 
@@ -162,7 +162,7 @@ class TestDenseOP:
         # Initially the position is at depot;
         assert state.position == DEPOT_IDX
         # the current remaining travel budget is max length
-        assert state.remaining_max_length == op_dense_reward.max_length > 0
+        assert state.remaining_budget == op_dense_reward.max_length > 0
         # Length from depot to depot is 0
         assert state.length[DEPOT_IDX] == 0
         # The depot is initially visited
@@ -196,7 +196,7 @@ class TestDenseOP:
         # Check that the state has changed
         assert not jnp.array_equal(new_state.position, state.position)
         assert not jnp.array_equal(
-            new_state.remaining_max_length, state.remaining_max_length
+            new_state.remaining_budget, state.remaining_budget
         )
         assert not jnp.array_equal(new_state.visited_mask, state.visited_mask)
         assert not jnp.array_equal(new_state.num_visited, state.num_visited)
@@ -215,7 +215,7 @@ class TestDenseOP:
         # Check that the state does not change when taking the same action again
         assert jnp.array_equal(new_state.position, state.position)
         assert jnp.array_equal(
-            new_state.remaining_max_length, state.remaining_max_length
+            new_state.remaining_budget, state.remaining_budget
         )
         assert jnp.array_equal(new_state.visited_mask, state.visited_mask)
         assert jnp.array_equal(new_state.num_visited, state.num_visited)
@@ -236,7 +236,7 @@ class TestDenseOP:
 
         while not timestep.last():
             # Check that the budget remains positive
-            assert state.remaining_max_length > 0
+            assert state.remaining_budget > 0
 
             # Check there are nodes that have not been selected
             assert not state.visited_mask.all()
@@ -248,7 +248,7 @@ class TestDenseOP:
                 assert timestep.reward > 0
 
             next_position = (state.position % op_dense_reward.num_nodes) + 1
-            valid_length = state.remaining_max_length - state.length[next_position]
+            valid_length = state.remaining_budget - state.length[next_position]
             if state.length[next_position] > valid_length:
                 next_position = DEPOT_IDX
 

@@ -17,7 +17,7 @@ class State:
     num_visited: number of total nodes visited
     prizes: array with the prizes associated with each node
     lengths: array with the length between the depot and each node
-    remaining_length: current tour length budget
+    remaining_budget: current tour length budget
     key: random key used for auto-reset
     """
 
@@ -28,7 +28,7 @@ class State:
     num_visited: chex.Numeric  # ()
     prizes: chex.Array  # (num_nodes, )
     length: chex.Array  # (num_nodes, )
-    remaining_max_length: chex.Numeric  # ( )
+    remaining_budget: chex.Numeric  # ( )
     key: chex.PRNGKey  # (2, )
 
 
@@ -40,7 +40,7 @@ class Observation(NamedTuple):
     index if not filled yet)
     prizes: array with the prizes associated with each node
     lengths: array of the length between the depot and each node
-    remaining_length: current tour length budget
+    remaining_budget: current tour length budget
     action_mask: binary mask (False/True <--> illegal/legal)
     """
 
@@ -49,5 +49,5 @@ class Observation(NamedTuple):
     trajectory: chex.Array   # (num_nodes, )
     prizes: chex.Array  # (num_nodes, )
     length: chex.Array  # (num_nodes, )
-    remaining_max_length: chex.Numeric  # ( )
+    remaining_budget: chex.Numeric  # ( )
     action_mask: chex.Array  # (num_nodes, )

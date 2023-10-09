@@ -72,7 +72,7 @@ class DummyGenerator(Generator):
         prizes = self._generate_prizes(key, length)
 
         # The initial travel budget (max length)
-        remaining_max_length = jnp.array(0.4, jnp.int32)
+        remaining_budget = jnp.array(0.4, jnp.int32)
 
         # Initially the agent has only visited the depot.
         visited_mask = jnp.array([True, False, False, False, False], bool)
@@ -86,7 +86,7 @@ class DummyGenerator(Generator):
             num_visited=num_visited,
             prizes=prizes,
             length=length,
-            remaining_max_length=remaining_max_length,
+            remaining_budget=remaining_budget,
             visited_mask=visited_mask,
             trajectory=trajectory,
             key=jax.random.PRNGKey(0),
