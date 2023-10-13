@@ -117,7 +117,7 @@ class OP(Environment[State]):
         self.num_nodes = self.generator.num_nodes
         self.max_length = self.generator.max_length
         self.reward_fn = reward_fn or DenseReward()
-        self._viewer = viewer  # or OPViewer(name="OP", render_mode="human")
+        self._viewer = viewer
 
     def __repr__(self) -> str:
         return f"OP environment with {self.num_nodes} nodes and travel budget of {self.max_length}."
@@ -155,6 +155,7 @@ class OP(Environment[State]):
         """
 
         travelled_distance = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates[action])
+        # travelled_distance = Generator._distance_between_two_nodes(state.coordinates[state.position], state.coordinates[action], axis=None)
         valid_length = state.remaining_budget - travelled_distance
         is_valid = ~state.visited_mask[action] & (state.length[action] <= valid_length)
 
@@ -293,7 +294,7 @@ class OP(Environment[State]):
         """Defines a mask for actions that are not valid"""
 
         # Calculate distances from the current position to all other coordinates
-        distances = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates, axis=-1)
+        distances = Generator._distance_between_two_nodes(state.coordinates[state.position], state.coordinates)
         valid_lengths = state.remaining_budget - distances
         action_mask = (~state.visited_mask) & (state.length <= valid_lengths)
 

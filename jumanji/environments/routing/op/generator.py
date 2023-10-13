@@ -87,8 +87,9 @@ class Generator(abc.ABC):
 
         raise NotImplementedError
 
+    @staticmethod
     def _distance_between_two_nodes(
-        self, node_one_coordinates: chex.Array, node_two_coordinates: chex.Array
+    node_one_coordinates: chex.Array, node_two_coordinates: chex.Array
     ) -> chex.Array:
         """Calculate the distance between the depot and nodes to be visited."""
         return jnp.linalg.norm(node_one_coordinates - node_two_coordinates, axis=-1)
