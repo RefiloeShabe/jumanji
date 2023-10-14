@@ -141,7 +141,7 @@ class TestSparseOP:
             state, timestep = step_fn(state, a)
 
         # Last action is invalid because it was already taken
-        assert timestep.reward == -(op_sparse_reward.num_nodes) * jnp.sqrt(2)
+        assert timestep.reward == -(op_sparse_reward.num_nodes + 1) * jnp.sqrt(2)
         assert timestep.last()
 
 
@@ -278,7 +278,7 @@ class TestDenseOP:
             assert timestep.reward > 0 or state.num_visited == 3
 
         # Last action is invalid because it was already taken
-        assert timestep.reward == -(op_dense_reward.num_nodes) * jnp.sqrt(2)
+        assert timestep.reward == -(op_dense_reward.num_nodes + 1) * jnp.sqrt(2)
         assert timestep.last()
 
 

@@ -21,13 +21,13 @@ class State:
     key: random key used for auto-reset
     """
 
-    coordinates: chex.Array  # (num_nodes, 2)
+    coordinates: chex.Array  # (num_nodes + 1, 2)
     position: chex.Numeric  # ()
-    visited_mask: chex.Array  # (num_nodes, )
-    trajectory: chex.Array   # (num_nodes, )
+    visited_mask: chex.Array  # (num_nodes + 1, )
+    trajectory: chex.Array   # (num_nodes + 1, )
     num_visited: chex.Numeric  # ()
-    prizes: chex.Array  # (num_nodes, )
-    length: chex.Array  # (num_nodes, )
+    prizes: chex.Array  # (num_nodes + 1, )
+    length: chex.Array  # (num_nodes + 1, )
     remaining_budget: chex.Numeric  # ( )
     key: chex.PRNGKey  # (2, )
 
@@ -44,10 +44,10 @@ class Observation(NamedTuple):
     action_mask: binary mask (False/True <--> illegal/legal)
     """
 
-    coordinates: chex.Array  # (num_nodes, 2)
+    coordinates: chex.Array  # (num_nodes + 1, 2)
     position: chex.Numeric  # ()
-    trajectory: chex.Array   # (num_nodes, )
-    prizes: chex.Array  # (num_nodes, )
-    length: chex.Array  # (num_nodes, )
+    trajectory: chex.Array   # (num_nodes + 1, )
+    prizes: chex.Array  # (num_nodes + 1, )
+    length: chex.Array  # (num_nodes + 1, )
     remaining_budget: chex.Numeric  # ( )
-    action_mask: chex.Array  # (num_nodes, )
+    action_mask: chex.Array  # (num_nodes + 1, )

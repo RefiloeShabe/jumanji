@@ -33,15 +33,15 @@ class Generator(abc.ABC):
 
         # Randomly sample the coordinates of the nodes
         coordinates = jax.random.uniform(
-            coordinates_key, (self.num_nodes, 2), minval=0, maxval=1
+            coordinates_key, (self.num_nodes + 1, 2), minval=0, maxval=1
         )
 
         # The initial position is set at the depot
         position = jnp.array(DEPOT_IDX, jnp.int32)
 
         # Initially, the agent has ony visited the depot
-        visited_mask = jnp.zeros(self.num_nodes, dtype=bool).at[DEPOT_IDX].set(True)
-        trajectory = jnp.full(self.num_nodes, DEPOT_IDX, jnp.int32)
+        visited_mask = jnp.zeros(self.num_nodes + 1, dtype=bool).at[DEPOT_IDX].set(True)
+        trajectory = jnp.full(self.num_nodes + 1, DEPOT_IDX, jnp.int32)
 
         # The number of visited nodes
         num_visited = jnp.array(1, jnp.int32)
@@ -108,7 +108,7 @@ class ConstantGenerator(Generator):
     def _generate_prizes(self, _key: chex.PRNGKey, _length: chex.Array
                          ) -> chex.Array:
         # All nodes have the same costant prize,  set depot prize to 0
-        prizes = jnp.ones(self.num_nodes).at[DEPOT_IDX].set(0)
+        prizes = jnp.ones(self.num_nodes + 1).at[DEPOT_IDX].set(0)
 
         return prizes
 
@@ -126,7 +126,7 @@ class UniformGenerator(Generator):
                          ) -> chex.Array:
         # All nodes have the same costant prize,  set depot prize to 0
         prizes = jax.random.uniform(
-            key, (self.num_nodes, ), minval=0, maxval=1).at[DEPOT_IDX].set(0)
+            key, (self.num_nodes + 1, ), minval=0, maxval=1).at[DEPOT_IDX].set(0)
 
         return prizes
 

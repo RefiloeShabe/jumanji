@@ -18,7 +18,7 @@ class TestDummyGenerator:
     def test_dummy_generator__properties(self, dummy_generator: DummyGenerator) -> None:
         """Validate that the dummy instance generator has the correct properties.
         """
-        assert dummy_generator.num_nodes == 5
+        assert dummy_generator.num_nodes == 4
         assert dummy_generator.max_length == 0.4
 
     def test_dummy_generator__call(self, dummy_generator: DummyGenerator) -> None:

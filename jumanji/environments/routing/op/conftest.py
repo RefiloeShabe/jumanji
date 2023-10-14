@@ -21,8 +21,8 @@ def sparse_reward() -> SparseReward:
 
 @pytest.fixture
 def op_dense_reward(dense_reward: DenseReward) -> OP:
-    """Instatiates an OP environment with dense reward, 20 nodes and
-    length budget of 2.
+    """Instatiates an OP environment with dense reward, 10 nodes and
+    length budget of 5.
     """
     return OP(generator=ProportionalGenerator(num_nodes=10, max_length=5),
               reward_fn=dense_reward)
@@ -30,8 +30,8 @@ def op_dense_reward(dense_reward: DenseReward) -> OP:
 
 @pytest.fixture
 def op_sparse_reward(sparse_reward: SparseReward) -> OP:
-    """Instatiates an OP environment with sparse reward, 20 nodes and
-    length budget of 2.
+    """Instatiates an OP environment with sparse reward, 10 nodes and
+    length budget of 5.
     """
     return OP(generator=ProportionalGenerator(num_nodes=10, max_length=5),
               reward_fn=sparse_reward)
@@ -39,12 +39,12 @@ def op_sparse_reward(sparse_reward: SparseReward) -> OP:
 
 class DummyGenerator(Generator):
     """Hardcoded 'Generator' mainly used for the testing and debugging. It
-    deterministically outputs a hardcoded instance with 20 nodes and maximum
-    length budget of 2.
+    deterministically outputs a hardcoded instance with 4 nodes and maximum
+    length budget of 0.4.
     """
 
     def __init__(self) -> None:
-        super().__init__(num_nodes=5, max_length=0.4)
+        super().__init__(num_nodes=4, max_length=0.4)
 
     def __call__(self, key: chex.PRNGKey) -> State:
         """Call method responsible for generating a new state. It returns an

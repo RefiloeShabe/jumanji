@@ -14,30 +14,27 @@ from jumanji.environments.routing.op.generator import Generator, UniformGenerato
 from jumanji.environments.routing.op.types import State, Observation
 from jumanji.environments.routing.op.reward import DenseReward, RewardFn
 
-# from jax.config import config
-# config.update('jax_disable_jit', True)
-
 
 class OP(Environment[State]):
     """ Orienteering Problem (OP) as described in [1].
 
     - observation: Observation
-        - coordinates: jax array (float) of shape (num_nodes, 2)
+        - coordinates: jax array (float) of shape (num_nodes + 1, 2)
             the coordinates of each node.
         - position: jax array (int32) of shape ()
             the indec corresponding to the last visited node
-        - trajectory: jax array (int32) of shape (num_nodes, )
+        - trajectory: jax array (int32) of shape (num_nodes + 1, )
             array of node indicies defining the route (set to DEPOT_IDX if not filled
             yet)
-        - action_mask: jax array (bool) of shape (num_nodes, )
+        - action_mask: jax array (bool) of shape (num_nodes + 1, )
             binary mask (False/True <--> illegal/legal <--> can/cannot be visited)
-        - prizes: jax array (float) of shape (num_nodes, ), could be either:
+        - prizes: jax array (float) of shape (num_nodes + 1, ), could be either:
             - constant: all nodes have the same prize equal to 1.
             - uniform: the prizes of the nodes are randomly sampled from a uniform
             distribution on a unit square.
             - proportional: the prizes of the nodes are proportional to the length
             between the depot and the nodes.
-        - length: jax array (float) of shape (num_nodes, )
+        - length: jax array (float) of shape (num_nodes + 1, )
             the length between each node and the depot (0.0 for the depot)
 
 
@@ -112,7 +109,7 @@ class OP(Environment[State]):
 
         self.generator = generator or UniformGenerator(
             num_nodes=20,
-            max_length=10,
+            max_length=2,
         )
         self.num_nodes = self.generator.num_nodes
         self.max_length = self.generator.max_length
@@ -155,7 +152,6 @@ class OP(Environment[State]):
         """
 
         travelled_distance = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates[action])
-        # travelled_distance = Generator._distance_between_two_nodes(state.coordinates[state.position], state.coordinates[action], axis=None)
         valid_length = state.remaining_budget - travelled_distance
         is_valid = ~state.visited_mask[action] & (state.length[action] <= valid_length)
 
@@ -198,31 +194,31 @@ class OP(Environment[State]):
             - action_mask: BoundedArray (bool) of shape (num_nodes + 1, )
         """
         coordinates = specs.BoundedArray(
-            shape=(self.num_nodes, 2),
+            shape=(self.num_nodes + 1, 2),
             minimum=0.0,
             maximum=1.0,
             dtype=float,
             name="coordinates",
         )
         position = specs.DiscreteArray(
-            self.num_nodes, dtype=jnp.int32, name="position"
+            self.num_nodes + 1, dtype=jnp.int32, name="position"
         )
         trajectory = specs.BoundedArray(
-            shape=(self.num_nodes, ),
+            shape=(self.num_nodes + 1, ),
             dtype=jnp.int32,
             minimum=0,
-            maximum=self.num_nodes,
+            maximum=self.num_nodes + 1,
             name="trajectory",
         )
         prizes = specs.BoundedArray(
-            shape=(self.num_nodes, ),
+            shape=(self.num_nodes + 1, ),
             minimum=0.0,
             maximum=self.max_length,
             dtype=float,
             name="prizes",
         )
         length = specs.BoundedArray(
-            shape=(self.num_nodes, ),
+            shape=(self.num_nodes + 1, ),
             minimum=0.0,
             maximum=self.max_length,
             dtype=float,
@@ -232,7 +228,7 @@ class OP(Environment[State]):
             shape=(), minimum=0.0, maximum=self.max_length, dtype=float, name="remaining_budget"
         )
         action_mask = specs.BoundedArray(
-            shape=(self.num_nodes, ),
+            shape=(self.num_nodes + 1, ),
             dtype=bool,
             minimum=False,
             maximum=True,
@@ -257,7 +253,7 @@ class OP(Environment[State]):
             action_spec: a 'specs.DiscreteArray' array.
         """
 
-        return specs.DiscreteArray(self.num_nodes, name="action")
+        return specs.DiscreteArray(self.num_nodes + 1, name="action")
 
     def _update_state(self, state: State, action: chex.Numeric) -> State:
         """
