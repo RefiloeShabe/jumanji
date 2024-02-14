@@ -29,7 +29,7 @@ class Generator(abc.ABC):
         Returns:
             An 'OP' environment state.
         """
-        key, coordinates_key, length_key, prize_key = jax.random.split(key, num=4)
+        key, coordinates_key, distance_key, prize_key = jax.random.split(key, num=4)
 
         # Randomly sample the coordinates of the nodes
         coordinates = jax.random.uniform(
@@ -47,16 +47,13 @@ class Generator(abc.ABC):
         num_visited = jnp.array(1, jnp.int32)
 
         # Randomly sample the length between nodes and the depot
-        length = self._distance_between_two_nodes(coordinates[DEPOT_IDX], coordinates)
-
-        # Set depot length to 0 --> length between depot and depot is 0
-        length = length.at[DEPOT_IDX].set(0.0)
+        distances = self._compute_distances(coordinates)
 
         # Generate prizes associated with each node (prize(depot) == 0)
-        prizes = self._generate_prizes(prize_key, length)
+        prizes = self._generate_prizes(prize_key, distances[DEPOT_IDX])
 
         # The remaining travel budget
-        remaining_budget = jnp.array(self.max_length, float)
+        budget = jnp.array(self.max_length, float)
 
         state = State(
             coordinates=coordinates,
@@ -65,16 +62,15 @@ class Generator(abc.ABC):
             trajectory=trajectory,
             num_visited=num_visited,
             prizes=prizes,
-            length=length,
-            remaining_budget=remaining_budget,
+            distances=distances,
+            budget=budget,
             key=key,
         )
 
         return state
 
     @abc.abstractmethod
-    def _generate_prizes(self, _key: chex.PRNGKey, _length: chex.Array
-                         ) -> chex.Array:
+    def _generate_prizes(self, _key: chex.PRNGKey, _length: chex.Array) -> chex.Array:
         """An abstract method responsible for generating an instance of node
         prizes based on the variant of the orienteering problem.
 
@@ -88,11 +84,11 @@ class Generator(abc.ABC):
         raise NotImplementedError
 
     @staticmethod
-    def _distance_between_two_nodes(
-    node_one_coordinates: chex.Array, node_two_coordinates: chex.Array
-    ) -> chex.Array:
-        """Calculate the distance between the depot and nodes to be visited."""
-        return jnp.linalg.norm(node_one_coordinates - node_two_coordinates, axis=-1)
+    def _compute_distances(coords: chex.Array) -> chex.Array:
+        """Calculate the distance between the nodes"""
+        return jnp.linalg.norm(
+            coords[:, jnp.newaxis, :] - coords[jnp.newaxis, :, :], axis=-1
+        )
 
 
 class ConstantGenerator(Generator):
@@ -105,8 +101,9 @@ class ConstantGenerator(Generator):
     the interval (0, max_length).
     """
 
-    def _generate_prizes(self, _key: chex.PRNGKey, _length: chex.Array
-                         ) -> chex.Array:
+    def _generate_prizes(
+        self, _key: chex.PRNGKey, _distances: chex.Array
+    ) -> chex.Array:
         # All nodes have the same costant prize,  set depot prize to 0
         prizes = jnp.ones(self.num_nodes + 1).at[DEPOT_IDX].set(0)
 
@@ -122,11 +119,13 @@ class UniformGenerator(Generator):
     interval (0, max_length).
     """
 
-    def _generate_prizes(self, key: chex.PRNGKey, _length: chex.Array
-                         ) -> chex.Array:
+    def _generate_prizes(self, key: chex.PRNGKey, _distances: chex.Array) -> chex.Array:
         # All nodes have the same costant prize,  set depot prize to 0
-        prizes = jax.random.uniform(
-            key, (self.num_nodes + 1, ), minval=0, maxval=1).at[DEPOT_IDX].set(0)
+        prizes = (
+            jax.random.uniform(key, (self.num_nodes + 1,), minval=0, maxval=1)
+            .at[DEPOT_IDX]
+            .set(0)
+        )
 
         return prizes
 
@@ -142,10 +141,9 @@ class ProportionalGenerator(Generator):
     nodes.
     """
 
-    def _generate_prizes(self, _key: chex.PRNGKey, length: chex.Array
-                         ) -> chex.Array:
+    def _generate_prizes(self, _key: chex.PRNGKey, distances: chex.Array) -> chex.Array:
         # All nodes have the same costant prize,  set depot prize to 0
-        prizes = 0.01 + (0.99 * length / jnp.max(length))
+        prizes = 0.01 + (0.99 * distances / jnp.max(distances))
         prizes = prizes.at[DEPOT_IDX].set(0)
 
         return prizes

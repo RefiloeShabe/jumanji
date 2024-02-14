@@ -24,9 +24,9 @@ class TestSparseOP:
         # Initially the position is at depot;
         assert state.position == DEPOT_IDX
         # the current remaining travel length is max length
-        assert state.remaining_budget == op_sparse_reward.max_length > 0.0
+        assert state.budget == op_sparse_reward.max_length > 0.0
         # Length from depot to depot is 0
-        assert state.length[DEPOT_IDX] == 0.0
+        assert state.distances[DEPOT_IDX][DEPOT_IDX] == 0.0
         # The depot is initially visited
         assert state.visited_mask[DEPOT_IDX]
         assert state.visited_mask.sum() == 1
@@ -52,18 +52,16 @@ class TestSparseOP:
         step_key, reset_key = jax.random.split(key)
         state, timestep = op_sparse_reward.reset(reset_key)
 
-        # Starting position is the depot, first action to visit first node
+        # Starting position is the depot, random action to visit first node
         new_action = jax.random.randint(
-            step_key, shape=(), minval=0, maxval=op_sparse_reward.num_nodes
+            step_key, shape=(), minval=1, maxval=op_sparse_reward.num_nodes
         )
 
         new_state, next_timestep = step_fn(state, new_action)
 
         # Check that the state has changed
         assert not jnp.array_equal(new_state.position, state.position)
-        assert not jnp.array_equal(
-            new_state.remaining_budget, state.remaining_budget
-        )
+        assert not jnp.array_equal(new_state.budget, state.budget)
         assert not jnp.array_equal(new_state.visited_mask, state.visited_mask)
         assert not jnp.array_equal(new_state.num_visited, state.num_visited)
         assert not jnp.array_equal(new_state.trajectory, state.trajectory)
@@ -80,9 +78,7 @@ class TestSparseOP:
         new_state, next_timestep = step_fn(state, new_action)
 
         assert jnp.array_equal(new_state.position, state.position)
-        assert jnp.array_equal(
-            new_state.remaining_budget, state.remaining_budget
-        )
+        assert jnp.array_equal(new_state.budget, state.budget)
         assert jnp.array_equal(new_state.visited_mask, state.visited_mask)
         assert jnp.array_equal(new_state.num_visited, state.num_visited)
         assert jnp.array_equal(new_state.trajectory, state.trajectory)
@@ -102,17 +98,20 @@ class TestSparseOP:
 
         while not timestep.last():
             # Check that the budget remains positive
-            assert state.remaining_budget > 0
-            
+            assert state.budget > 0
+
             # Check there are nodes that have not been selected
             assert not state.visited_mask.all()
 
             # Check that the reward is 0 while trajectory is not done
             assert timestep.reward == 0
-            
+
             next_position = (state.position % op_sparse_reward.num_nodes) + 1
-            valid_length = state.remaining_budget - state.length[next_position]
-            if state.length[next_position] > valid_length:
+            valid_length = (
+                state.distances[state.position][next_position]
+                + state.distances[next_position][DEPOT_IDX]
+            )
+            if state.budget < valid_length:
                 next_position = DEPOT_IDX
 
             state, timestep = step_fn(state, next_position)
@@ -122,7 +121,7 @@ class TestSparseOP:
         assert timestep.last()
 
     def test_op_sparse_invalid_action(self, op_sparse_reward: OP) -> None:
-        """ Checks that an invalid action leads to a termination and the appropriate
+        """Checks that an invalid action leads to a termination and the appropriate
         reward is received.
         """
         step_fn = jax.jit(op_sparse_reward.step)
@@ -162,9 +161,9 @@ class TestDenseOP:
         # Initially the position is at depot;
         assert state.position == DEPOT_IDX
         # the current remaining travel budget is max length
-        assert state.remaining_budget == op_dense_reward.max_length > 0
+        assert state.budget == op_dense_reward.max_length > 0
         # Length from depot to depot is 0
-        assert state.length[DEPOT_IDX] == 0
+        assert state.distances[DEPOT_IDX][DEPOT_IDX] == 0
         # The depot is initially visited
         assert state.visited_mask[DEPOT_IDX]
         assert state.visited_mask.sum() == 1
@@ -189,15 +188,13 @@ class TestDenseOP:
 
         # Starting position is the depot, first action to visit first node
         new_action = jax.random.randint(
-            step_key, shape=(), minval=0, maxval=op_dense_reward.num_nodes
+            step_key, shape=(), minval=1, maxval=op_dense_reward.num_nodes
         )
         new_state, next_timestep = step_fn(state, new_action)
 
         # Check that the state has changed
         assert not jnp.array_equal(new_state.position, state.position)
-        assert not jnp.array_equal(
-            new_state.remaining_budget, state.remaining_budget
-        )
+        assert not jnp.array_equal(new_state.budget, state.budget)
         assert not jnp.array_equal(new_state.visited_mask, state.visited_mask)
         assert not jnp.array_equal(new_state.num_visited, state.num_visited)
         assert not jnp.array_equal(new_state.trajectory, state.trajectory)
@@ -214,16 +211,14 @@ class TestDenseOP:
 
         # Check that the state does not change when taking the same action again
         assert jnp.array_equal(new_state.position, state.position)
-        assert jnp.array_equal(
-            new_state.remaining_budget, state.remaining_budget
-        )
+        assert jnp.array_equal(new_state.budget, state.budget)
         assert jnp.array_equal(new_state.visited_mask, state.visited_mask)
         assert jnp.array_equal(new_state.num_visited, state.num_visited)
         assert jnp.array_equal(new_state.trajectory, state.trajectory)
 
     def test_op_dense_reward__does_not_smoke(self, op_dense_reward: OP) -> None:
         """Tests that we can run an episode without any errors"""
-        check_env_does_not_smoke(op_dense_reward)  
+        check_env_does_not_smoke(op_dense_reward)
 
     def test_op_dense__trajectory_action(self, op_dense_reward: OP) -> None:
         """Tests that the agent goes back to the depot when the remaining travel
@@ -236,7 +231,7 @@ class TestDenseOP:
 
         while not timestep.last():
             # Check that the budget remains positive
-            assert state.remaining_budget > 0
+            assert state.budget > 0
 
             # Check there are nodes that have not been selected
             assert not state.visited_mask.all()
@@ -248,8 +243,11 @@ class TestDenseOP:
                 assert timestep.reward > 0
 
             next_position = (state.position % op_dense_reward.num_nodes) + 1
-            valid_length = state.remaining_budget - state.length[next_position]
-            if state.length[next_position] > valid_length:
+            valid_length = (
+                state.distances[state.position][next_position]
+                + state.distances[next_position][DEPOT_IDX]
+            )
+            if state.budget < valid_length:
                 next_position = DEPOT_IDX
 
             state, timestep = step_fn(state, next_position)
@@ -260,7 +258,7 @@ class TestDenseOP:
         assert timestep.last()
 
     def test_op_dense_invalid_action(self, op_dense_reward: OP) -> None:
-        """ Checks that an invalid action leads to a termination and that the
+        """Checks that an invalid action leads to a termination and that the
         appropriate reward is received.
         """
         step_fn = jax.jit(op_dense_reward.step)
@@ -285,7 +283,7 @@ class TestDenseOP:
 def test_op__equivalence_dense_sparse_reward(
     op_dense_reward: OP, op_sparse_reward: OP
 ) -> None:
-    """ Checks that both dense and sparse environments return equal rewards
+    """Checks that both dense and sparse environments return equal rewards
     when an episode is done
     """
     dense_step_fn = jax.jit(op_dense_reward.step)
@@ -307,6 +305,4 @@ def test_op__equivalence_dense_sparse_reward(
         return_sparse += timestep.reward
 
     # Check that both returns are the same and not the invalid action penalty
-    assert (
-        return_sparse == return_dense > -2 * op_dense_reward.num_nodes * jnp.sqrt(2)
-    )
+    assert return_sparse == return_dense > -2 * op_dense_reward.num_nodes * jnp.sqrt(2)

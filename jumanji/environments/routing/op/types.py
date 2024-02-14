@@ -1,5 +1,6 @@
 import chex
 from typing import TYPE_CHECKING, NamedTuple
+
 if TYPE_CHECKING:
     from dataclasses import dataclass
 else:
@@ -24,11 +25,11 @@ class State:
     coordinates: chex.Array  # (num_nodes + 1, 2)
     position: chex.Numeric  # ()
     visited_mask: chex.Array  # (num_nodes + 1, )
-    trajectory: chex.Array   # (num_nodes + 1, )
+    trajectory: chex.Array  # (num_nodes + 1, )
     num_visited: chex.Numeric  # ()
     prizes: chex.Array  # (num_nodes + 1, )
-    length: chex.Array  # (num_nodes + 1, )
-    remaining_budget: chex.Numeric  # ( )
+    distances: chex.Array  # (num_nodes + 1, )
+    budget: chex.Numeric  # ( )
     key: chex.PRNGKey  # (2, )
 
 
@@ -46,8 +47,8 @@ class Observation(NamedTuple):
 
     coordinates: chex.Array  # (num_nodes + 1, 2)
     position: chex.Numeric  # ()
-    trajectory: chex.Array   # (num_nodes + 1, )
+    trajectory: chex.Array  # (num_nodes + 1, )
     prizes: chex.Array  # (num_nodes + 1, )
-    length: chex.Array  # (num_nodes + 1, )
-    remaining_budget: chex.Numeric  # ( )
+    distances: chex.Array  # (num_nodes + 1, )
+    budget: chex.Numeric  # ( )
     action_mask: chex.Array  # (num_nodes + 1, )

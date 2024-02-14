@@ -16,7 +16,7 @@ from jumanji.environments.routing.op.reward import DenseReward, RewardFn
 
 
 class OP(Environment[State]):
-    """ Orienteering Problem (OP) as described in [1].
+    """Orienteering Problem (OP) as described in [1].
 
     - observation: Observation
         - coordinates: jax array (float) of shape (num_nodes + 1, 2)
@@ -148,12 +148,14 @@ class OP(Environment[State]):
 
         Returns:
             state: the next state of the environment.
-            timestep: the timestep to be observed.    
+            timestep: the timestep to be observed.
         """
+        # compute valid lengths to travel based on budget
+        valid_length = (
+            state.distances[state.position][action] + state.distances[DEPOT_IDX][action]
+        )
 
-        travelled_distance = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates[action])
-        valid_length = state.remaining_budget - travelled_distance
-        is_valid = ~state.visited_mask[action] & (state.length[action] <= valid_length)
+        is_valid = ~state.visited_mask[action] & (valid_length <= state.budget)
 
         next_state = jax.lax.cond(
             is_valid,
@@ -167,10 +169,12 @@ class OP(Environment[State]):
 
         observation = self._state_to_observation(next_state)
 
-        # Terminate if visit depot or the action is invalid or there are no nodes to visit 
-        is_done = next_state.visited_mask[DEPOT_IDX] | ~is_valid | next_state.visited_mask.all()
-
-        # is_done = next_state.visited_mask.all() | ~is_valid
+        # Terminate if visit depot or the action is invalid or there are no nodes to visit
+        is_done = (
+            next_state.visited_mask[DEPOT_IDX]
+            | ~is_valid
+            | next_state.visited_mask.all()
+        )
 
         timestep = jax.lax.cond(
             is_done,
@@ -182,7 +186,7 @@ class OP(Environment[State]):
         return next_state, timestep
 
     def observation_spec(self) -> specs.Spec[Observation]:
-        """"Returns the observation spec.
+        """ "Returns the observation spec.
 
         Returns:
             Spec for the 'Observation' whose fields are:
@@ -190,7 +194,7 @@ class OP(Environment[State]):
             - position: DiscreteArray (int32) of shape (num_nodes + 1, ).
             - trajectory: BoundedArray (int32) of shape (num_nodes, ).
             - prizes: BoundedArray (float) of shape (num_nodes + 1, ).
-            - length: BoundedArray (float) of shape (num_nodes + 1, ).
+            - distances: BoundedArray (float) of shape (num_nodes + 1, ).
             - action_mask: BoundedArray (bool) of shape (num_nodes + 1, )
         """
         coordinates = specs.BoundedArray(
@@ -204,31 +208,35 @@ class OP(Environment[State]):
             self.num_nodes + 1, dtype=jnp.int32, name="position"
         )
         trajectory = specs.BoundedArray(
-            shape=(self.num_nodes + 1, ),
+            shape=(self.num_nodes + 1,),
             dtype=jnp.int32,
             minimum=0,
             maximum=self.num_nodes + 1,
             name="trajectory",
         )
         prizes = specs.BoundedArray(
-            shape=(self.num_nodes + 1, ),
+            shape=(self.num_nodes + 1,),
             minimum=0.0,
             maximum=self.max_length,
             dtype=float,
             name="prizes",
         )
-        length = specs.BoundedArray(
-            shape=(self.num_nodes + 1, ),
+        distances = specs.BoundedArray(
+            shape=(self.num_nodes + 1, self.num_nodes + 1),
             minimum=0.0,
             maximum=self.max_length,
             dtype=float,
-            name="length"
+            name="length",
         )
-        remaining_budget = specs.BoundedArray(
-            shape=(), minimum=0.0, maximum=self.max_length, dtype=float, name="remaining_budget"
+        budget = specs.BoundedArray(
+            shape=(),
+            minimum=0.0,
+            maximum=self.max_length,
+            dtype=float,
+            name="budget",
         )
         action_mask = specs.BoundedArray(
-            shape=(self.num_nodes + 1, ),
+            shape=(self.num_nodes + 1,),
             dtype=bool,
             minimum=False,
             maximum=True,
@@ -241,13 +249,13 @@ class OP(Environment[State]):
             position=position,
             trajectory=trajectory,
             prizes=prizes,
-            length=length,
-            remaining_budget=remaining_budget,
+            distances=distances,
+            budget=budget,
             action_mask=action_mask,
         )
 
     def action_spec(self) -> specs.DiscreteArray:
-        """"Returns the action spec.
+        """ "Returns the action spec.
 
         Returns:
             action_spec: a 'specs.DiscreteArray' array.
@@ -267,32 +275,32 @@ class OP(Environment[State]):
             state: State object corresponding to the new state of the environment.
         """
 
-        # compute traveled distance: distance between previous node and currrent node
-        travelled_distance = jnp.linalg.norm(state.coordinates[state.position] - state.coordinates[action])
-
         # Set depot to False (valid to visit) since it can be visited again
         visited_mask = state.visited_mask.at[DEPOT_IDX].set(False)
 
-        return State(
+        new_budget = state.budget - state.distances[state.position][action]
+
+        state = State(
             coordinates=state.coordinates,
+            distances=state.distances,
+            prizes=state.prizes,
             position=action,
-            visited_mask=visited_mask.at[action].set(True),
+            budget=new_budget,
+            visited_mask=visited_mask.at[action].set(1),
             trajectory=state.trajectory.at[state.num_visited].set(action),
             num_visited=state.num_visited + 1,
-            prizes=state.prizes,
-            length=state.length,
-            remaining_budget=state.remaining_budget - travelled_distance,
             key=state.key,
-
         )
+
+        return state
 
     def _action_mask(self, state: State) -> chex.Array:
         """Defines a mask for actions that are not valid"""
 
         # Calculate distances from the current position to all other coordinates
-        distances = Generator._distance_between_two_nodes(state.coordinates[state.position], state.coordinates)
-        valid_lengths = state.remaining_budget - distances
-        action_mask = (~state.visited_mask) & (state.length <= valid_lengths)
+        action_mask = (~state.visited_mask) & (
+            state.budget >= state.distances[state.position] + state.distances[DEPOT_IDX]
+        )
 
         # The depot is reachable if we are not at it already.
         action_mask = action_mask.at[DEPOT_IDX].set(state.position != DEPOT_IDX)
@@ -315,7 +323,7 @@ class OP(Environment[State]):
             position=state.position,
             trajectory=state.trajectory,
             prizes=state.prizes,
-            length=state.length,
-            remaining_budget=state.remaining_budget,
+            distances=state.distances,
+            budget=state.budget,
             action_mask=action_mask,
         )

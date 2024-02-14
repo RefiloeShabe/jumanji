@@ -20,18 +20,16 @@ def test_dense_reward(op_dense_reward: OP, dense_reward: DenseReward) -> None:
 
     # check the reward for invalid action
     next_state, _ = step_fn(state, 0)
-    penalty = -jnp.sqrt(2) * (op_dense_reward.num_nodes)
+    penalty = -jnp.sqrt(2) * (op_dense_reward.num_nodes + 1)
     reward = dense_reward(state, 0, next_state, is_valid=False)
     assert reward == penalty
 
 
-def test_sparse_reward(
-    op_sparse_reward: OP, sparse_reward: SparseReward
-) -> None:
+def test_sparse_reward(op_sparse_reward: OP, sparse_reward: SparseReward) -> None:
     sparse_reward = jax.jit(sparse_reward)
     step_fn = jax.jit(op_sparse_reward.step)
     state, timestep = op_sparse_reward.reset(jax.random.PRNGKey(0))
-    penalty = -jnp.sqrt(2) * (op_sparse_reward.num_nodes)
+    penalty = -jnp.sqrt(2) * (op_sparse_reward.num_nodes + 1)
 
     # check that all but the last step leads to 0 reward
     next_state = state

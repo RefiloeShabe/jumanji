@@ -16,8 +16,7 @@ class TestDummyGenerator:
         return DummyGenerator()
 
     def test_dummy_generator__properties(self, dummy_generator: DummyGenerator) -> None:
-        """Validate that the dummy instance generator has the correct properties.
-        """
+        """Validate that the dummy instance generator has the correct properties."""
         assert dummy_generator.num_nodes == 4
         assert dummy_generator.max_length == 0.4
 
@@ -38,7 +37,7 @@ class TestConstantGenerator:
     def constant_generator(self) -> ConstantGenerator:
         return ConstantGenerator(
             num_nodes=20,
-            max_length=10,
+            max_length=2,
         )
 
     def test_constant_generator__properties(
@@ -46,11 +45,12 @@ class TestConstantGenerator:
     ) -> None:
         """Validate that the constant instance generator has the corrent properties."""
         assert constant_generator.num_nodes == 20
-        assert constant_generator.max_length == 10
+        assert constant_generator.max_length == 2
 
-    def test_constant_generator__call(self, constant_generator: ConstantGenerator
-                                      ) -> None:
-        """ Validate that the constant instance generator's call function is jit-table
+    def test_constant_generator__call(
+        self, constant_generator: ConstantGenerator
+    ) -> None:
+        """Validate that the constant instance generator's call function is jit-table
         and compiles only once. Also check that giving two different keys results in
         two different instances.
         """
@@ -68,7 +68,7 @@ class TestUniformGenerator:
     def uniform_generator(self) -> UniformGenerator:
         return UniformGenerator(
             num_nodes=20,
-            max_length=10,
+            max_length=2,
         )
 
     def test_uniform_generator__properties(
@@ -76,10 +76,10 @@ class TestUniformGenerator:
     ) -> None:
         """Validate that the random instance generator has the corrent properties."""
         assert uniform_generator.num_nodes == 20
-        assert uniform_generator.max_length == 10
+        assert uniform_generator.max_length == 2
 
     def test_uniform_generator__call(self, uniform_generator: UniformGenerator) -> None:
-        """ Validate that the random instance generator's call function is jit-table
+        """Validate that the random instance generator's call function is jit-table
         and compiles only once. Also check that giving two different keys results in
         two different instances.
         """
@@ -97,21 +97,22 @@ class TestProportionalGenerator:
     def proportional_generator(self) -> ProportionalGenerator:
         return ProportionalGenerator(
             num_nodes=20,
-            max_length=10,
+            max_length=2,
         )
 
     def test_proportional_generator__properties(
-        self, proportional_generator: ProportionalGenerator,
+        self,
+        proportional_generator: ProportionalGenerator,
     ) -> None:
-        """Validate that the proportional instance generator has the corrent properties.
-        """
+        """Validate that the proportional instance generator has the corrent properties."""
         assert proportional_generator.num_nodes == 20
-        assert proportional_generator.max_length == 10
+        assert proportional_generator.max_length == 2
 
     def test_proportional_generator__call(
-        self, proportional_generator: ProportionalGenerator,
+        self,
+        proportional_generator: ProportionalGenerator,
     ) -> None:
-        """ Validate that the proportional instance generator's call function is
+        """Validate that the proportional instance generator's call function is
         jit-able and compiles only once. Also check that giving two different keys
         results in two different instances.
         """

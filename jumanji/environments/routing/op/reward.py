@@ -29,6 +29,7 @@ class SparseReward(RewardFn):
     previously selected is selected again or the return to the depot is impossible
     within the time budget.
     """
+
     def __call__(
         self,
         state: State,
@@ -39,13 +40,17 @@ class SparseReward(RewardFn):
         compute_sparse_reward = lambda: jax.lax.cond(
             is_valid,
             jnp.dot,
-            lambda *_: jnp.array(-len(state.trajectory) * jnp.sqrt(2), float),
+            lambda *_: jnp.array(-len(state.trajectory + 1) * jnp.sqrt(2), float),
             next_state.visited_mask,
             next_state.prizes,
         )
 
         # If the episode is done
-        is_done = next_state.visited_mask[DEPOT_IDX] | ~is_valid | next_state.visited_mask.all()
+        is_done = (
+            next_state.visited_mask[DEPOT_IDX]
+            | ~is_valid
+            | next_state.visited_mask.all()
+        )
         reward = jax.lax.cond(
             is_done,
             compute_sparse_reward,
@@ -60,6 +65,7 @@ class DenseReward(RewardFn):
     previously visited is visited again or returning to the depot from the node is not
     possible within the time constraint.
     """
+
     def __call__(
         self,
         state: State,
